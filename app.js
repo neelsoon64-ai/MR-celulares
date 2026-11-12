@@ -2,8 +2,8 @@ const DB_NAME = "mr-celulares-db";
 const DB_VERSION = 1;
 const PRODUCT_STORE = "products";
 const RECEIPT_STORE = "receipts";
-// Enter the store number with country code only, for example 54911XXXXXXXX.
-const WHATSAPP_PHONE = "";
+// Store number in international format with country code only.
+const WHATSAPP_PHONE = "5492904397759";
 const INSTAGRAM_URL = "";
 const TIKTOK_URL = "";
 // Optional first-load catalog: name, brand, condition, price, currency, battery, grade, description, photoUrl.
