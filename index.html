@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09090b">
+  <meta name="description" content="MR Celulares: generá comprobantes de pago y planes en cuotas, y consultá el catálogo de equipos.">
+  <title>MR Celulares | Comprobantes y celulares</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Inicio">
+        <img class="brand-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares">
+      </a>
+      <nav class="site-nav" aria-label="Navegación principal">
+        <a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a>
+        <a href="#inventory-view" data-filter-link="used">Usados seleccionados</a>
+        <a href="#payment-receipts">Boletas</a>
+        <a href="#plan-canje">Plan Canje</a>
+        <a href="#garantia">Garantía</a>
+        <a href="#ubicacion">Ubicación</a>
+      </nav>
+      <a class="button button-whatsapp nav-cta whatsapp-link" href="#" data-message="Hola, quiero consultar por los celulares disponibles.">
+        <span class="whatsapp-icon" aria-hidden="true">◉</span><span>Consultar por WhatsApp</span>
+      </a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">☰</button>
+    </header>
+
+    <main>
+      <section class="payment-generator" id="payment-receipts" aria-labelledby="payment-generator-title">
+        <div class="generator-heading">
+          <div>
+            <p class="generator-eyebrow"><span class="generator-live-dot"></span> HERRAMIENTA DE VENTAS</p>
+            <h1 id="payment-generator-title">Boletas y comprobantes</h1>
+            <p class="generator-subtitle">Prepará el recibo, controlá las cuotas y compartilo con tu cliente.</p>
+          </div>
+          <span class="generator-secure"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v5c0 4.5-2.9 8-7 10-4.1-2-7-5.5-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg> Comprobante listo para imprimir</span>
+        </div>
+
+        <div class="generator-mode" role="group" aria-label="Modalidad de pago">
+          <button class="generator-mode-button is-active" type="button" data-payment-mode="cash" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18m-9 2v3m-4-3h.01M16 15h.01"/></svg>
+            <span>Contado<small>Pago completo</small></span>
+          </button>
+          <button class="generator-mode-button" type="button" data-payment-mode="installments" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h2m4 0h2m-8 4h2m4 0h2m-8 3h8"/></svg>
+            <span>Plan en cuotas<small>Seguimiento de pagos</small></span>
+          </button>
+        </div>
+
+        <div class="generator-layout">
+          <form class="generator-form" id="payment-form" novalidate>
+            <div class="generator-section-heading">
+              <span class="generator-step">01</span>
+              <div><h2>Datos de la operación</h2><p>Completá la información del titular y el equipo.</p></div>
+            </div>
+
+            <div class="generator-fields">
+              <label class="generator-field generator-field-wide" for="receipt-customer-name">
+                <span>Nombre y apellido <i>*</i></span>
+                <input id="receipt-customer-name" name="customerName" autocomplete="name" maxlength="100" placeholder="Ej. Martina López" required>
+              </label>
+              <label class="generator-field" for="receipt-customer-document">
+                <span>DNI del titular <i>*</i></span>
+                <input id="receipt-customer-document" name="customerDocument" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="Ej. 35.123.456" required>
+              </label>
+              <label class="generator-field" for="receipt-customer-phone">
+                <span>Teléfono / WhatsApp</span>
+                <input id="receipt-customer-phone" name="customerPhone" type="tel" autocomplete="tel" maxlength="24" placeholder="+54 9 11 1234 5678">
+                <small>Necesario para WhatsApp · incluí el código de país y área.</small>
+              </label>
+              <label class="generator-field generator-field-wide" for="receipt-device">
+                <span>Modelo del equipo <i>*</i></span>
+                <input id="receipt-device" name="device" maxlength="100" placeholder="Ej. iPhone 15 Pro · 256 GB" required>
+              </label>
+              <label class="generator-field generator-field-wide" for="receipt-serial">
+                <span>IMEI / N.º de serie <small>Opcional</small></span>
+                <input id="receipt-serial" name="serial" maxlength="60" placeholder="Identificador del equipo">
+              </label>
+              <label class="generator-field generator-field-wide" for="receipt-total">
+                <span>Monto total <i>*</i></span>
+                <div class="generator-money-input"><span>$</span><input id="receipt-total" name="total" inputmode="decimal" autocomplete="off" placeholder="0" required aria-describedby="receipt-total-hint"></div>
+                <small id="receipt-total-hint">Pesos argentinos · Podés escribir 850000 o 850.000.</small>
+              </label>
+            </div>
+
+            <div class="installment-controls" id="installment-controls" hidden>
+              <div class="generator-section-heading installment-heading">
+                <span class="generator-step">02</span>
+                <div><h2>Plan de financiación</h2><p>Definí la entrega y las fechas de cobro.</p></div>
+              </div>
+              <div class="generator-fields">
+                <label class="generator-field" for="receipt-downpayment">
+                  <span>Entrega inicial / seña</span>
+                  <div class="generator-money-input"><span>$</span><input id="receipt-downpayment" name="downpayment" inputmode="decimal" autocomplete="off" placeholder="0" value="0"></div>
+                </label>
+                <label class="generator-field" for="receipt-installment-count">
+                  <span>Cantidad de cuotas</span>
+                  <select id="receipt-installment-count" name="installmentCount">
+                    <option value="2">2 cuotas</option>
+                    <option value="3" selected>3 cuotas</option>
+                    <option value="4">4 cuotas</option>
+                    <option value="6">6 cuotas</option>
+                    <option value="12">12 cuotas</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </label>
+                <label class="generator-field" id="custom-installment-field" for="receipt-custom-count" hidden>
+                  <span>Cuotas personalizadas</span>
+                  <input id="receipt-custom-count" name="customInstallmentCount" type="number" min="1" max="60" step="1" value="5" inputmode="numeric">
+                </label>
+                <label class="generator-field" for="receipt-first-due-date">
+                  <span>Vence la primera cuota</span>
+                  <input id="receipt-first-due-date" name="firstDueDate" type="date" required>
+                </label>
+              </div>
+              <div class="plan-totals" aria-live="polite">
+                <div><span>Saldo a financiar</span><strong id="financed-balance">$ 0</strong></div>
+                <div><span>Valor por cuota</span><strong id="installment-amount">$ 0</strong></div>
+              </div>
+            </div>
+            <p class="generator-error" id="payment-form-error" role="alert" hidden></p>
+            <div class="generator-form-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg> El comprobante se genera en tu navegador y no se guarda en un servidor.</div>
+          </form>
+
+          <aside class="generator-preview-panel" aria-label="Vista previa del comprobante">
+            <div class="preview-toolbar">
+              <div><span class="preview-live-dot"></span> VISTA PREVIA <small>· Se actualiza automáticamente</small></div>
+              <span class="preview-receipt-number" id="receipt-number"></span>
+            </div>
+            <article class="receipt-paper" id="receipt-paper" aria-live="polite">
+              <div class="paper-topline"><img src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><span id="receipt-issued-date"></span></div>
+              <div class="paper-title"><div><span class="paper-eyebrow">COMPROBANTE DE PAGO</span><h2 id="receipt-mode-title">Boleta de contado</h2></div><span class="paper-status" id="receipt-status">Pendiente</span></div>
+              <div class="paper-customer">
+                <div><span>TITULAR</span><strong id="receipt-preview-name">Nombre y apellido</strong></div>
+                <div class="paper-document"><span>DNI</span><strong id="receipt-preview-document">—</strong></div>
+              </div>
+              <div class="paper-device"><div class="paper-device-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 18.5h4"/></svg></div><div><span>EQUIPO</span><strong id="receipt-preview-device">Modelo del equipo</strong><small id="receipt-preview-serial"></small></div></div>
+              <div class="paper-total"><div><span id="receipt-total-label">TOTAL ABONADO</span><small id="receipt-total-caption">Operación cancelada</small></div><strong id="receipt-preview-total">$ 0</strong></div>
+              <div class="paper-plan" id="paper-plan" hidden>
+                <div class="paper-plan-summary">
+                  <div><span>Entrega inicial</span><strong id="receipt-preview-downpayment">$ 0</strong></div>
+                  <div><span>Saldo pendiente</span><strong id="receipt-preview-balance">$ 0</strong></div>
+                </div>
+                <div class="paper-installments-heading"><strong>Detalle de cuotas</strong><span id="receipt-installments-progress">0 de 0 pagas</span></div>
+                <div class="paper-installments" id="receipt-installments"></div>
+              </div>
+              <div class="paper-next-payment" id="receipt-next-payment" hidden><span>↗ <span id="receipt-next-label">PRÓXIMO VENCIMIENTO</span></span><strong id="receipt-next-detail"></strong></div>
+              <div class="paper-footer"><span id="receipt-warranty">Conserve este comprobante como constancia de pago.</span><div><span>MR CELULARES</span><small>Gracias por confiar en nosotros</small></div></div>
+            </article>
+            <div class="preview-actions">
+              <button class="generator-print-button" id="print-generator-receipt" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7zm10-5h.01"/></svg> Imprimir / guardar PDF
+              </button>
+              <a class="generator-whatsapp-button" id="send-receipt-whatsapp" href="#" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.6a8.4 8.4 0 0 1-12.4 7.3L3 20l1.2-4.9a8.4 8.4 0 1 1 16.3-3.5Z"/><path d="M8.8 8.1c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.7c.1.3.1.5-.1.7l-.5.6c-.2.2-.2.4-.1.6.4.7 1.1 1.5 1.8 1.9.2.1.4.1.6-.1l.7-.8c.2-.2.4-.2.7-.1l1.6.8c.3.1.4.3.4.5 0 .3-.2 1.1-.7 1.5-.5.5-1.2.7-2 .6-1.1-.2-2.3-.7-3.6-1.9-1.1-1-2-2.3-2.2-3.3-.2-1 .1-1.8.5-2.3Z"/></svg> Enviar por WhatsApp
+              </a>
+            </div>
+            <p class="preview-hint">El cliente recibirá el detalle de su pago y el estado actualizado de sus cuotas.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="hero-kicker"><span class="hero-kicker-dot"></span> MR CELULARES · TECNOLOGÍA CON RESPALDO</span>
+          <h1>Tecnología de punta,<br>nueva o seminueva,<br><span>con garantía real.</span></h1>
+          <p>Equipos 100% originales sellados de fábrica y usados testeados punto por punto. Tomamos tu usado en parte de pago.</p>
+          <div class="hero-actions">
+            <a class="button button-primary hero-cta" href="#inventory-view">Ver catálogo <span aria-hidden="true">↗</span></a>
+            <a class="button button-outline" href="#plan-canje">Cotizar mi usado</a>
+          </div>
+          <div class="hero-proof"><span class="proof-check">✓</span> Garantía escrita · Envíos seguros · Atención personalizada</div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="hero-glow"></div>
+          <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+          <div class="hero-phone phone-back"><span class="camera camera-one"></span><span class="camera camera-two"></span><span class="camera camera-three"></span><span class="camera-flash"></span></div>
+          <div class="hero-phone phone-front"><span class="phone-island"></span><span class="phone-wallpaper"></span><span class="phone-logo">MR</span></div>
+          <div class="hero-sticker"><span class="sticker-icon">↗</span><span><strong>Envíos seguros</strong><small>Entrega inmediata</small></span></div>
+          <span class="hero-spark spark-one">✳</span><span class="hero-spark spark-two">✧</span>
+        </div>
+      </section>
+
+      <section class="trust-strip" id="garantia" aria-label="Beneficios de comprar en MR Celulares">
+        <article class="trust-item"><span class="trust-icon">✓</span><span><strong>Garantía escrita</strong><small>En equipos nuevos y usados</small></span></article>
+        <article class="trust-item"><span class="trust-icon">⌕</span><span><strong>100% testeados</strong><small>Batería, cámaras y funciones</small></span></article>
+        <article class="trust-item"><span class="trust-icon">↻</span><span><strong>Plan Canje</strong><small>Tu equipo como parte de pago</small></span></article>
+        <article class="trust-item"><span class="trust-icon">$</span><span><strong>Pagá a tu manera</strong><small>Efectivo, transferencia y más</small></span></article>
+      </section>
+
+      <section class="catalog-section" id="inventory-view">
+        <div class="section-heading">
+          <div><p class="eyebrow">ELEGÍ TU PRÓXIMO EQUIPO</p><h2>Encontrá el indicado.</h2><p class="section-subtitle">Originales, revisados y listos para acompañarte.</p></div>
+          <span class="catalog-count" id="catalog-count">0 equipos disponibles</span>
+        </div>
+        <div class="filter-row">
+          <div class="filter-pills" role="group" aria-label="Filtrar celulares">
+            <button class="filter-pill active" data-catalog-filter="all" type="button" aria-pressed="true">Todos</button>
+            <button class="filter-pill" data-catalog-filter="sealed" type="button" aria-pressed="false">Nuevos sellados</button>
+            <button class="filter-pill" data-catalog-filter="used" type="button" aria-pressed="false">Usados seleccionados</button>
+            <button class="filter-pill" data-catalog-filter="apple" type="button" aria-pressed="false">Apple · iPhone</button>
+            <button class="filter-pill" data-catalog-filter="samsung" type="button" aria-pressed="false">Samsung</button>
+            <button class="filter-pill" data-catalog-filter="xiaomi-motorola" type="button" aria-pressed="false">Xiaomi · Motorola</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="search-input" type="search" placeholder="Buscar por modelo..." aria-label="Buscar por modelo">
+          </label>
+          <span class="catalog-note">Stock actualizado · Consultá disponibilidad</span>
+        </div>
+        <div class="product-grid" id="product-grid"></div>
+        <div class="empty-state" id="inventory-empty" hidden>
+          <div class="empty-icon" aria-hidden="true">▧</div>
+          <h2 id="inventory-empty-title">Próximamente, nuevos equipos.</h2>
+          <p id="inventory-empty-copy">Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar el tuyo.</p>
+          <a class="button button-primary whatsapp-link" data-message="Hola, estoy buscando un celular. ¿Qué equipos tienen disponibles?" href="#">Consultar disponibilidad</a>
+          <button class="button button-secondary" id="empty-add-button" type="button">Publicar primer celular</button>
+        </div>
+      </section>
+
+      <section class="trade-section" id="plan-canje">
+        <div class="trade-copy">
+          <p class="eyebrow">RENOVÁ INTELIGENTE</p>
+          <h2>Tu próximo celular<br>vale más con tu usado.</h2>
+          <p>Contanos qué equipo tenés y en qué estado está. Te respondemos con una cotización personalizada, sin compromiso.</p>
+          <div class="trade-perks"><span>✓ Tasación personalizada</span><span>✓ Usalo como parte de pago</span></div>
+        </div>
+        <form class="trade-form" id="trade-form">
+          <h3>Contanos de tu equipo</h3>
+          <label class="trade-label" for="trade-brand">Marca</label>
+          <select class="trade-input" id="trade-brand" required><option value="" selected disabled>Elegí una marca</option><option>Apple</option><option>Samsung</option><option>Motorola</option><option>Xiaomi</option><option>Otra</option></select>
+          <label class="trade-label" for="trade-model">Modelo y capacidad</label>
+          <input class="trade-input" id="trade-model" placeholder="Ej. iPhone 13 · 128 GB" required maxlength="100">
+          <div class="trade-form-row">
+            <div><label class="trade-label" for="trade-battery">Batería</label><select class="trade-input" id="trade-battery"><option>No sé</option><option>Menos del 80%</option><option>80–89%</option><option>90–94%</option><option>95–100%</option></select></div>
+            <div><label class="trade-label" for="trade-condition">Estado estético</label><select class="trade-input" id="trade-condition"><option>Impecable</option><option>Muy bueno</option><option>Con detalles de uso</option><option>Con daños</option></select></div>
+          </div>
+          <button class="button button-whatsapp trade-submit" type="submit"><span class="whatsapp-icon" aria-hidden="true">◉</span> Cotizar por WhatsApp</button>
+          <small class="trade-privacy">La cotización final se confirma al revisar el equipo.</small>
+        </form>
+      </section>
+
+      <section class="faq-section">
+        <div class="section-heading"><div><p class="eyebrow">TE ACOMPAÑAMOS</p><h2>Preguntas frecuentes.</h2></div></div>
+        <div class="faq-list">
+          <details class="faq-item"><summary>¿Qué garantía tienen los usados seleccionados?<span></span></summary><p>Todos los equipos usados se revisan y se entregan con garantía escrita. Consultanos el plazo y las condiciones específicas del modelo que te interesa.</p></details>
+          <details class="faq-item"><summary>¿Cómo funciona el Plan Canje?<span></span></summary><p>Nos contás la marca, el modelo y el estado de tu celular. Lo evaluamos y te pasamos una cotización para usarlo como parte de pago.</p></details>
+          <details class="faq-item"><summary>¿Qué medios de pago aceptan?<span></span></summary><p>Podés consultar por efectivo, transferencia, tarjetas y otras alternativas disponibles al momento de la compra.</p></details>
+          <details class="faq-item"><summary>¿Hacen envíos o entregas?<span></span></summary><p>Coordinamos la entrega y el envío seguro directamente con vos. Escribinos para consultar opciones y disponibilidad en tu zona.</p></details>
+        </div>
+      </section>
+
+      <details class="management-panel" id="management-panel">
+        <summary>Gestión de inventario y ventas</summary>
+        <section class="stats" aria-label="Resumen del inventario">
+          <article class="stat-card"><span>En stock</span><strong id="stock-count">0</strong><small>disponibles para vender</small></article>
+          <article class="stat-card"><span>Vendidos</span><strong id="sold-count">0</strong><small>registrados en el sistema</small></article>
+          <article class="stat-card"><span>Comprobantes</span><strong id="receipt-count">0</strong><small>ventas con comprador</small></article>
+        </section>
+        <div class="management-actions"><button class="button button-primary" id="add-product-button" type="button"><span aria-hidden="true">＋</span> Publicar celular</button><button class="tab" id="inventory-tab" type="button" aria-selected="true">Inventario</button><button class="tab" id="receipts-tab" type="button" aria-selected="false">Comprobantes <span class="tab-count" id="tab-receipt-count">0</span></button></div>
+        <label class="select-wrap management-filter"><span>Ver estado:</span><select id="status-filter"><option value="available">En stock</option><option value="all">Todos</option><option value="sold">Vendidos</option></select></label>
+        <section id="receipts-view" hidden><div class="section-intro"><div><h2>Comprobantes de venta</h2><p class="muted">Consulta los datos del comprador o imprime una copia.</p></div></div><div class="receipt-list" id="receipt-list"></div><div class="empty-state" id="receipts-empty" hidden><h2>Aún no hay comprobantes</h2><p>Cuando registres una venta, su comprobante aparecerá aquí.</p></div></section>
+      </details>
+    </main>
+    <footer class="site-footer" id="ubicacion">
+      <div class="footer-main">
+        <div class="footer-about"><img class="footer-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><p>Celulares seleccionados, garantía real y atención personalizada. Elegí tu próximo equipo con confianza.</p></div>
+        <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a><a href="#inventory-view" data-filter-link="used">Usados seleccionados</a><a href="#plan-canje">Plan Canje</a><a href="#garantia">Garantía</a></div>
+        <div class="footer-column"><h3>Estamos para ayudarte</h3><span>Atención: coordiná tu horario</span><span>Entregas a coordinar</span><span>Consultá por tu zona</span><a class="footer-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar horarios y zona de entrega.">Escribinos por WhatsApp ↗</a><a class="instagram-link" data-social="Instagram" href="#">Instagram ↗</a><a class="tiktok-link" data-social="TikTok" href="#">TikTok ↗</a></div>
+      </div>
+      <div class="footer-bottom"><span>© <span id="current-year"></span> MR Celulares</span><span>Los datos del inventario se guardan en este dispositivo.</span></div>
+    </footer>
+  </div>
+
+  <dialog class="dialog" id="product-dialog">
+    <form id="product-form" class="dialog-card" novalidate>
+      <div class="dialog-heading">
+        <div><p class="eyebrow">INVENTARIO</p><h2 id="product-dialog-title">Agregar celular</h2></div>
+        <button class="icon-button" type="button" data-close="product-dialog" aria-label="Cerrar">×</button>
+      </div>
+      <input id="product-id" type="hidden">
+      <label class="field-label" for="product-name">Marca y modelo <span>*</span></label>
+      <input class="text-input" id="product-name" name="name" placeholder="Ej. iPhone 13 128 GB" required maxlength="80">
+      <label class="field-label" for="product-brand">Marca</label>
+      <select class="text-input" id="product-brand" name="brand">
+        <option value="">Detectar desde el modelo</option><option value="Apple">Apple</option><option value="Samsung">Samsung</option><option value="Xiaomi">Xiaomi</option><option value="Motorola">Motorola</option><option value="Otra">Otra</option>
+      </select>
+      <div class="form-row">
+        <div>
+          <label class="field-label" for="product-condition">Estado <span>*</span></label>
+          <select class="text-input" id="product-condition" name="condition" required>
+            <option value="used">Usado</option>
+            <option value="sealed">Nuevo sellado</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="product-price">Precio <span>*</span></label>
+          <input class="text-input" id="product-price" name="price" type="text" inputmode="decimal" autocomplete="off" placeholder="Ej. 800.000" aria-describedby="product-price-hint" required>
+          <small class="price-hint" id="product-price-hint">Podés usar punto para separar miles. Ej.: 800.000.</small>
+        </div>
+      </div>
+      <div class="form-row">
+        <div><label class="field-label" for="product-currency">Moneda</label><select class="text-input" id="product-currency" name="currency"><option value="ARS">Pesos argentinos (ARS)</option><option value="USD">Dólares (USD)</option></select></div>
+        <div><label class="field-label" for="product-battery">Batería (usados, opcional)</label><input class="text-input" id="product-battery" name="battery" type="number" min="1" max="100" placeholder="Ej. 92"></div>
+      </div>
+      <label class="field-label" for="product-grade">Estado estético (opcional)</label>
+      <select class="text-input" id="product-grade" name="grade"><option value="">Sin especificar</option><option value="A+ Impecable">A+ Impecable</option><option value="A Excelente">A Excelente</option><option value="B Muy bueno">B Muy bueno</option><option value="Con detalles de uso">Con detalles de uso</option></select>
+      <label class="field-label" for="product-description">Detalle (opcional)</label>
+      <input class="text-input" id="product-description" name="description" placeholder="Color, capacidad, accesorios..." maxlength="160">
+      <label class="field-label" for="product-photo">Foto (opcional)</label>
+      <div class="photo-picker">
+        <input id="product-photo" name="photo" type="file" accept="image/*">
+        <span id="photo-file-name">Elegir una foto del celular</span>
+        <img id="photo-preview" alt="Vista previa de la foto" hidden>
+      </div>
+      <p class="form-error" id="product-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button button-quiet" type="button" data-close="product-dialog">Cancelar</button>
+        <button class="button button-primary" type="submit">Guardar celular</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="sale-dialog">
+    <form id="sale-form" class="dialog-card" novalidate>
+      <div class="dialog-heading">
+        <div><p class="eyebrow">REGISTRAR VENTA</p><h2>Datos del comprador</h2></div>
+        <button class="icon-button" type="button" data-close="sale-dialog" aria-label="Cerrar">×</button>
+      </div>
+      <div class="sale-product-summary" id="sale-product-summary"></div>
+      <input id="sale-product-id" type="hidden">
+      <div class="form-row">
+        <div class="field-wide">
+          <label class="field-label" for="buyer-name">Nombre y apellido <span>*</span></label>
+          <input class="text-input" id="buyer-name" name="buyerName" autocomplete="name" maxlength="100" required>
+        </div>
+        <div>
+          <label class="field-label" for="buyer-document">DNI / documento</label>
+          <input class="text-input" id="buyer-document" name="buyerDocument" maxlength="40">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label" for="buyer-phone">Teléfono</label>
+          <input class="text-input" id="buyer-phone" name="buyerPhone" type="tel" autocomplete="tel" maxlength="40">
+        </div>
+        <div>
+          <label class="field-label" for="buyer-email">Correo electrónico</label>
+          <input class="text-input" id="buyer-email" name="buyerEmail" type="email" autocomplete="email" maxlength="100">
+        </div>
+      </div>
+      <label class="field-label" for="buyer-address">Domicilio (opcional)</label>
+      <input class="text-input" id="buyer-address" name="buyerAddress" autocomplete="street-address" maxlength="160">
+      <div class="form-row">
+        <div>
+          <label class="field-label" for="sale-price">Precio de venta <span>*</span></label>
+          <input class="text-input" id="sale-price" name="salePrice" type="text" inputmode="decimal" autocomplete="off" placeholder="Ej. 800.000" aria-describedby="sale-price-hint" required>
+          <small class="price-hint" id="sale-price-hint">Acepta puntos de miles y coma decimal.</small>
+        </div>
+        <div>
+          <label class="field-label" for="sale-payment">Forma de pago</label>
+          <select class="text-input" id="sale-payment" name="payment">
+            <option value="No especificada">No especificada</option>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Tarjeta">Tarjeta</option>
+            <option value="USDT / Cripto">USDT / Cripto</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+      </div>
+      <p class="form-error" id="sale-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button button-quiet" type="button" data-close="sale-dialog">Cancelar</button>
+        <button class="button button-primary" type="submit">Registrar venta y crear comprobante</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog receipt-dialog" id="receipt-dialog">
+    <div class="dialog-card receipt-dialog-card">
+      <div class="dialog-heading no-print">
+        <div><p class="eyebrow">COMPROBANTE GUARDADO</p><h2>Detalle de la venta</h2></div>
+        <button class="icon-button" type="button" data-close="receipt-dialog" aria-label="Cerrar">×</button>
+      </div>
+      <article class="print-receipt" id="print-receipt"></article>
+      <div class="dialog-actions no-print">
+        <button class="button button-quiet" type="button" data-close="receipt-dialog">Cerrar</button>
+        <button class="button button-primary" id="print-button" type="button">Imprimir comprobante</button>
+      </div>
+    </div>
+  </dialog>
+
+  <a class="floating-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar por un celular." aria-label="Consultar por WhatsApp"><span aria-hidden="true">◉</span></a>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
