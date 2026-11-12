@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#09090b">
-  <meta name="description" content="MR Celulares: generá comprobantes de pago y planes en cuotas, y consultá el catálogo de equipos.">
-  <title>MR Celulares | Comprobantes y celulares</title>
+  <meta name="description" content="MR Celulares: comprobantes de pago y catálogo de celulares y accesorios.">
+  <title>MR Celulares | Celulares y accesorios</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
 </head>
@@ -18,6 +18,7 @@
       <nav class="site-nav" aria-label="Navegación principal">
         <a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a>
         <a href="#inventory-view" data-filter-link="used">Usados seleccionados</a>
+        <a href="#inventory-view" data-filter-link="accessories">Accesorios</a>
         <a href="#payment-receipts">Boletas</a>
         <a href="#plan-canje">Plan Canje</a>
         <a href="#garantia">Garantía</a>
@@ -194,14 +195,15 @@
 
       <section class="catalog-section" id="inventory-view">
         <div class="section-heading">
-          <div><p class="eyebrow">ELEGÍ TU PRÓXIMO EQUIPO</p><h2>Encontrá el indicado.</h2><p class="section-subtitle">Originales, revisados y listos para acompañarte.</p></div>
+          <div><p class="eyebrow" id="catalog-eyebrow">ELEGÍ TU PRÓXIMO EQUIPO</p><h2 id="catalog-title">Encontrá el indicado.</h2><p class="section-subtitle" id="catalog-subtitle">Originales, revisados y listos para acompañarte.</p></div>
           <span class="catalog-count" id="catalog-count">0 equipos disponibles</span>
         </div>
         <div class="filter-row">
-          <div class="filter-pills" role="group" aria-label="Filtrar celulares">
+          <div class="filter-pills" role="group" aria-label="Filtrar productos">
             <button class="filter-pill active" data-catalog-filter="all" type="button" aria-pressed="true">Todos</button>
             <button class="filter-pill" data-catalog-filter="sealed" type="button" aria-pressed="false">Nuevos sellados</button>
             <button class="filter-pill" data-catalog-filter="used" type="button" aria-pressed="false">Usados seleccionados</button>
+            <button class="filter-pill" data-catalog-filter="accessories" type="button" aria-pressed="false">Accesorios</button>
             <button class="filter-pill" data-catalog-filter="apple" type="button" aria-pressed="false">Apple · iPhone</button>
             <button class="filter-pill" data-catalog-filter="samsung" type="button" aria-pressed="false">Samsung</button>
             <button class="filter-pill" data-catalog-filter="xiaomi-motorola" type="button" aria-pressed="false">Xiaomi · Motorola</button>
@@ -220,7 +222,7 @@
           <h2 id="inventory-empty-title">Próximamente, nuevos equipos.</h2>
           <p id="inventory-empty-copy">Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar el tuyo.</p>
           <a class="button button-primary whatsapp-link" data-message="Hola, estoy buscando un celular. ¿Qué equipos tienen disponibles?" href="#">Consultar disponibilidad</a>
-          <button class="button button-secondary" id="empty-add-button" type="button">Publicar primer celular</button>
+          <button class="button button-secondary" id="empty-add-button" type="button">Agregar primer producto</button>
         </div>
       </section>
 
@@ -263,15 +265,15 @@
           <article class="stat-card"><span>Vendidos</span><strong id="sold-count">0</strong><small>registrados en el sistema</small></article>
           <article class="stat-card"><span>Comprobantes</span><strong id="receipt-count">0</strong><small>ventas con comprador</small></article>
         </section>
-        <div class="management-actions"><button class="button button-primary" id="add-product-button" type="button"><span aria-hidden="true">＋</span> Publicar celular</button><button class="tab" id="inventory-tab" type="button" aria-selected="true">Inventario</button><button class="tab" id="receipts-tab" type="button" aria-selected="false">Comprobantes <span class="tab-count" id="tab-receipt-count">0</span></button></div>
+        <div class="management-actions"><button class="button button-primary" id="add-product-button" type="button"><span aria-hidden="true">＋</span> Agregar producto</button><button class="tab" id="inventory-tab" type="button" aria-selected="true">Inventario</button><button class="tab" id="receipts-tab" type="button" aria-selected="false">Comprobantes <span class="tab-count" id="tab-receipt-count">0</span></button></div>
         <label class="select-wrap management-filter"><span>Ver estado:</span><select id="status-filter"><option value="available">En stock</option><option value="all">Todos</option><option value="sold">Vendidos</option></select></label>
         <section id="receipts-view" hidden><div class="section-intro"><div><h2>Comprobantes de venta</h2><p class="muted">Consulta los datos del comprador o imprime una copia.</p></div></div><div class="receipt-list" id="receipt-list"></div><div class="empty-state" id="receipts-empty" hidden><h2>Aún no hay comprobantes</h2><p>Cuando registres una venta, su comprobante aparecerá aquí.</p></div></section>
       </details>
     </main>
     <footer class="site-footer" id="ubicacion">
       <div class="footer-main">
-        <div class="footer-about"><img class="footer-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><p>Celulares seleccionados, garantía real y atención personalizada. Elegí tu próximo equipo con confianza.</p></div>
-        <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a><a href="#inventory-view" data-filter-link="used">Usados seleccionados</a><a href="#plan-canje">Plan Canje</a><a href="#garantia">Garantía</a></div>
+        <div class="footer-about"><img class="footer-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><p>Celulares, accesorios seleccionados y atención personalizada. Elegí tu próximo equipo con confianza.</p></div>
+        <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a><a href="#inventory-view" data-filter-link="used">Usados seleccionados</a><a href="#inventory-view" data-filter-link="accessories">Accesorios</a><a href="#plan-canje">Plan Canje</a><a href="#garantia">Garantía</a></div>
         <div class="footer-column"><h3>Estamos para ayudarte</h3><span>Atención: coordiná tu horario</span><span>Entregas a coordinar</span><span>Consultá por tu zona</span><a class="footer-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar horarios y zona de entrega.">Escribinos por WhatsApp ↗</a><a class="instagram-link" data-social="Instagram" href="#">Instagram ↗</a><a class="tiktok-link" data-social="TikTok" href="#">TikTok ↗</a></div>
       </div>
       <div class="footer-bottom"><span>© <span id="current-year"></span> MR Celulares</span><span>Los datos del inventario se guardan en este dispositivo.</span></div>
@@ -285,14 +287,19 @@
         <button class="icon-button" type="button" data-close="product-dialog" aria-label="Cerrar">×</button>
       </div>
       <input id="product-id" type="hidden">
-      <label class="field-label" for="product-name">Marca y modelo <span>*</span></label>
+      <label class="field-label" for="product-category">Tipo de producto <span>*</span></label>
+      <select class="text-input" id="product-category" name="category" required>
+        <option value="phone">Celular</option>
+        <option value="accessory">Accesorio · fundas, auriculares, cargadores...</option>
+      </select>
+      <label class="field-label" for="product-name"><span id="product-name-label-text">Marca y modelo</span> <span>*</span></label>
       <input class="text-input" id="product-name" name="name" placeholder="Ej. iPhone 13 128 GB" required maxlength="80">
-      <label class="field-label" for="product-brand">Marca</label>
+      <label class="field-label" id="product-brand-label" for="product-brand">Marca</label>
       <select class="text-input" id="product-brand" name="brand">
         <option value="">Detectar desde el modelo</option><option value="Apple">Apple</option><option value="Samsung">Samsung</option><option value="Xiaomi">Xiaomi</option><option value="Motorola">Motorola</option><option value="Otra">Otra</option>
       </select>
       <div class="form-row">
-        <div>
+        <div id="product-condition-field">
           <label class="field-label" for="product-condition">Estado <span>*</span></label>
           <select class="text-input" id="product-condition" name="condition" required>
             <option value="used">Usado</option>
@@ -307,22 +314,22 @@
       </div>
       <div class="form-row">
         <div><label class="field-label" for="product-currency">Moneda</label><select class="text-input" id="product-currency" name="currency"><option value="ARS">Pesos argentinos (ARS)</option><option value="USD">Dólares (USD)</option></select></div>
-        <div><label class="field-label" for="product-battery">Batería (usados, opcional)</label><input class="text-input" id="product-battery" name="battery" type="number" min="1" max="100" placeholder="Ej. 92"></div>
+        <div id="product-battery-field"><label class="field-label" for="product-battery">Batería (usados, opcional)</label><input class="text-input" id="product-battery" name="battery" type="number" min="1" max="100" placeholder="Ej. 92"></div>
       </div>
-      <label class="field-label" for="product-grade">Estado estético (opcional)</label>
+      <label class="field-label" id="product-grade-label" for="product-grade">Estado estético (opcional)</label>
       <select class="text-input" id="product-grade" name="grade"><option value="">Sin especificar</option><option value="A+ Impecable">A+ Impecable</option><option value="A Excelente">A Excelente</option><option value="B Muy bueno">B Muy bueno</option><option value="Con detalles de uso">Con detalles de uso</option></select>
-      <label class="field-label" for="product-description">Detalle (opcional)</label>
+      <label class="field-label" id="product-description-label" for="product-description">Detalle (opcional)</label>
       <input class="text-input" id="product-description" name="description" placeholder="Color, capacidad, accesorios..." maxlength="160">
-      <label class="field-label" for="product-photo">Foto (opcional)</label>
+      <label class="field-label" id="product-photo-label" for="product-photo">Foto (opcional)</label>
       <div class="photo-picker">
         <input id="product-photo" name="photo" type="file" accept="image/*">
-        <span id="photo-file-name">Elegir una foto del celular</span>
+        <span id="photo-file-name">Elegir una foto del producto</span>
         <img id="photo-preview" alt="Vista previa de la foto" hidden>
       </div>
       <p class="form-error" id="product-error" role="alert" hidden></p>
       <div class="dialog-actions">
         <button class="button button-quiet" type="button" data-close="product-dialog">Cancelar</button>
-        <button class="button button-primary" type="submit">Guardar celular</button>
+        <button class="button button-primary" id="product-submit-button" type="submit">Guardar celular</button>
       </div>
     </form>
   </dialog>

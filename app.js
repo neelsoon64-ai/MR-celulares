@@ -3,7 +3,7 @@ const DB_VERSION = 1;
 const PRODUCT_STORE = "products";
 const RECEIPT_STORE = "receipts";
 // Store number in international format with country code only.
-const WHATSAPP_PHONE = "5492904397759";
+const WHATSAPP_PHONE = "5492804397759";
 const INSTAGRAM_URL = "";
 const TIKTOK_URL = "";
 // Optional first-load catalog: name, brand, condition, price, currency, battery, grade, description, photoUrl.
@@ -16,14 +16,23 @@ const elements = {
   productForm: document.querySelector("#product-form"),
   productTitle: document.querySelector("#product-dialog-title"),
   productId: document.querySelector("#product-id"),
+  productCategory: document.querySelector("#product-category"),
+  productNameLabel: document.querySelector("#product-name-label-text"),
   productName: document.querySelector("#product-name"),
+  productBrandLabel: document.querySelector("#product-brand-label"),
   productCondition: document.querySelector("#product-condition"),
+  productConditionField: document.querySelector("#product-condition-field"),
   productPrice: document.querySelector("#product-price"),
   productDescription: document.querySelector("#product-description"),
   productBrand: document.querySelector("#product-brand"),
   productCurrency: document.querySelector("#product-currency"),
   productBattery: document.querySelector("#product-battery"),
+  productBatteryField: document.querySelector("#product-battery-field"),
   productGrade: document.querySelector("#product-grade"),
+  productGradeLabel: document.querySelector("#product-grade-label"),
+  productDescriptionLabel: document.querySelector("#product-description-label"),
+  productPhotoLabel: document.querySelector("#product-photo-label"),
+  productSubmitButton: document.querySelector("#product-submit-button"),
   productPhoto: document.querySelector("#product-photo"),
   photoFileName: document.querySelector("#photo-file-name"),
   photoPreview: document.querySelector("#photo-preview"),
@@ -48,6 +57,10 @@ const elements = {
   receiptCount: document.querySelector("#receipt-count"),
   tabReceiptCount: document.querySelector("#tab-receipt-count"),
   search: document.querySelector("#search-input"),
+  catalogCount: document.querySelector("#catalog-count"),
+  catalogEyebrow: document.querySelector("#catalog-eyebrow"),
+  catalogTitle: document.querySelector("#catalog-title"),
+  catalogSubtitle: document.querySelector("#catalog-subtitle"),
   statusFilter: document.querySelector("#status-filter"),
   inventoryTab: document.querySelector("#inventory-tab"),
   receiptsTab: document.querySelector("#receipts-tab"),
@@ -246,6 +259,14 @@ function render() {
 function renderProducts() {
   const query = elements.search.value.trim().toLocaleLowerCase("es");
   const status = elements.statusFilter.value;
+  const accessoriesFilter = catalogFilter === "accessories";
+  elements.catalogEyebrow.textContent = accessoriesFilter ? "ACCESORIOS PARA TU EQUIPO" : "ELEGÍ TU PRÓXIMO EQUIPO";
+  elements.catalogTitle.textContent = accessoriesFilter ? "Accesorios para todos los días." : "Encontrá el indicado.";
+  elements.catalogSubtitle.textContent = accessoriesFilter
+    ? "Fundas, auriculares, cargadores y más."
+    : "Originales, revisados y listos para acompañarte.";
+  elements.search.placeholder = accessoriesFilter ? "Buscar accesorios..." : "Buscar por modelo...";
+  elements.search.setAttribute("aria-label", accessoriesFilter ? "Buscar accesorios" : "Buscar por modelo");
   const visibleProducts = products.filter(product => {
     const searchable = `${product.name} ${product.brand || ""} ${product.description || ""}`.toLocaleLowerCase("es");
     const matchesText = searchable.includes(query);
@@ -253,8 +274,9 @@ function renderProducts() {
     const matchesStatus = status === "all" || (status === "available" ? isAvailable : product.status === status);
     const brand = detectBrand(product);
     const matchesCategory = catalogFilter === "all"
-      || (catalogFilter === "sealed" && product.condition === "sealed")
-      || (catalogFilter === "used" && product.condition !== "sealed")
+      || (catalogFilter === "accessories" && product.category === "accessory")
+      || (catalogFilter === "sealed" && product.category !== "accessory" && product.condition === "sealed")
+      || (catalogFilter === "used" && product.category !== "accessory" && product.condition !== "sealed")
       || (catalogFilter === "apple" && brand === "apple")
       || (catalogFilter === "samsung" && brand === "samsung")
       || (catalogFilter === "xiaomi-motorola" && ["xiaomi", "motorola"].includes(brand));
@@ -263,13 +285,27 @@ function renderProducts() {
 
   elements.productGrid.replaceChildren();
   visibleProducts.forEach(product => elements.productGrid.append(createProductCard(product)));
-  document.querySelector("#catalog-count").textContent = `${visibleProducts.length} ${visibleProducts.length === 1 ? "equipo disponible" : "equipos disponibles"}`;
+  elements.catalogCount.textContent = accessoriesFilter
+    ? `${visibleProducts.length} ${visibleProducts.length === 1 ? "accesorio disponible" : "accesorios disponibles"}`
+    : `${visibleProducts.length} ${visibleProducts.length === 1 ? "equipo disponible" : "equipos disponibles"}`;
   const noProductsExist = products.filter(product => product.status !== "sold").length === 0;
+  const noAccessoriesExist = !products.some(product => product.category === "accessory");
   elements.inventoryEmpty.hidden = visibleProducts.length > 0;
-  elements.inventoryEmptyTitle.textContent = noProductsExist ? "Próximamente, nuevos equipos." : "No encontramos equipos con ese filtro.";
-  elements.inventoryEmptyCopy.textContent = noProductsExist
-    ? "Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar el tuyo."
-    : "Probá con otra búsqueda o consultanos por WhatsApp para encontrar tu próximo celular.";
+  elements.inventoryEmptyTitle.textContent = accessoriesFilter
+    ? noAccessoriesExist ? "Próximamente, accesorios." : "No encontramos accesorios con ese filtro."
+    : noProductsExist ? "Próximamente, nuevos equipos." : "No encontramos equipos con ese filtro.";
+  elements.inventoryEmptyCopy.textContent = accessoriesFilter
+    ? noAccessoriesExist
+      ? "Estamos preparando fundas, auriculares, cargadores y más. Escribinos para consultar."
+      : "Probá con otra búsqueda o consultanos por accesorios disponibles."
+    : noProductsExist
+      ? "Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar el tuyo."
+      : "Probá con otra búsqueda o consultanos por WhatsApp para encontrar tu próximo celular.";
+  const emptyContact = elements.inventoryEmpty.querySelector(".whatsapp-link");
+  emptyContact.dataset.message = accessoriesFilter
+    ? "Hola, quiero consultar por accesorios disponibles."
+    : "Hola, estoy buscando un celular. ¿Qué equipos tienen disponibles?";
+  emptyContact.href = whatsappUrl(emptyContact.dataset.message);
   elements.emptyAddButton.hidden = true;
 }
 
@@ -286,29 +322,35 @@ function createProductCard(product) {
   const card = document.createElement("article");
   card.className = "product-card";
   const isSold = product.status === "sold";
-  const isSealed = product.condition === "sealed";
-  const condition = isSealed ? "NUEVO SELLADO" : "USADO SELECCIONADO";
+  const isAccessory = product.category === "accessory";
+  const isSealed = !isAccessory && product.condition === "sealed";
+  const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO SELLADO" : "USADO SELECCIONADO";
+  const conditionClass = isAccessory ? "accessory" : isSealed ? "sealed" : "used";
   const photoObjectUrl = product.photo instanceof Blob ? URL.createObjectURL(product.photo) : null;
   const photoUrl = photoObjectUrl || product.photoUrl || "";
   const photo = photoUrl
     ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(product.name)}">`
-    : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
-  const usedDetails = !isSealed && (product.battery || product.grade)
+    : isAccessory
+      ? `<div class="product-placeholder accessory" aria-hidden="true"><span class="placeholder-glow"></span><svg viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8m-9 5v8"/></svg><span class="placeholder-brand">ACCESORIOS</span></div>`
+      : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
+  const usedDetails = !isAccessory && !isSealed && (product.battery || product.grade)
     ? `<div class="product-condition-details">${product.battery ? `<span class="battery-tag">⌁ Batería ${escapeHtml(product.battery)}%</span>` : ""}${product.grade ? `<span class="grade-tag">${escapeHtml(product.grade)}</span>` : ""}</div>`
     : "";
+  const productDescription = product.description
+    || (isSold ? `Vendido ${formatDate(product.soldAt)}` : isAccessory ? "Accesorios para celulares" : brandLabel(detectBrand(product)));
   card.innerHTML = `
     <div class="product-image">
       ${photo}
-      <span class="condition-badge ${isSealed ? "sealed" : "used"}">${condition}</span>
+      <span class="condition-badge ${conditionClass}">${condition}</span>
       ${isSold ? '<span class="sold-overlay">VENDIDO</span>' : ""}
     </div>
     <div class="product-content">
       <h3>${escapeHtml(product.name)}</h3>
-      <p class="product-description">${escapeHtml(product.description || (isSold ? `Vendido ${formatDate(product.soldAt)}` : brandLabel(detectBrand(product))))}</p>
+      <p class="product-description">${escapeHtml(productDescription)}</p>
       ${usedDetails}
       <p class="product-price">${formatPrice(product.price, product.currency)}<span>${product.currency === "USD" ? "USD" : "ARS"}</span></p>
       <p class="product-price-note">${product.priceNote ? escapeHtml(product.priceNote) : "Precio contado · Consultá financiación"}</p>
-      <a class="button button-whatsapp product-contact whatsapp-link ${isSold ? "is-sold" : ""}" href="#" data-message="Hola, quiero consultar por el ${escapeHtml(product.name)}. ¿Sigue disponible?">Consultar este equipo <span aria-hidden="true">↗</span></a>
+      <a class="button button-whatsapp product-contact whatsapp-link ${isSold ? "is-sold" : ""}" href="#" data-message="Hola, quiero consultar por el ${isAccessory ? "accesorio" : "celular"} ${escapeHtml(product.name)}. ¿Sigue disponible?">Consultar este ${isAccessory ? "accesorio" : "equipo"} <span aria-hidden="true">↗</span></a>
       <div class="product-owner-actions">
         ${isSold
           ? '<button class="small-button restore-button" data-action="restore">Volver a stock</button>'
@@ -350,12 +392,36 @@ function renderReceipts() {
   elements.receiptsEmpty.hidden = receipts.length > 0;
 }
 
-function openProductDialog(product = null) {
+function updateProductCategoryFields() {
+  const isAccessory = elements.productCategory.value === "accessory";
+  elements.productTitle.textContent = `${elements.productId.value ? "Editar" : "Agregar"} ${isAccessory ? "accesorio" : "celular"}`;
+  elements.productNameLabel.textContent = isAccessory ? "Nombre del accesorio" : "Marca y modelo";
+  elements.productName.placeholder = isAccessory
+    ? "Ej. Funda de silicona para iPhone 15"
+    : "Ej. iPhone 13 128 GB";
+  elements.productBrandLabel.hidden = isAccessory;
+  elements.productBrand.hidden = isAccessory;
+  elements.productConditionField.hidden = isAccessory;
+  elements.productCondition.required = !isAccessory;
+  elements.productBatteryField.hidden = isAccessory;
+  elements.productGradeLabel.hidden = isAccessory;
+  elements.productGrade.hidden = isAccessory;
+  elements.productDescriptionLabel.textContent = isAccessory ? "Descripción (opcional)" : "Detalle (opcional)";
+  elements.productDescription.placeholder = isAccessory
+    ? "Ej. Compatible con iPhone 15 · color negro"
+    : "Color, capacidad, accesorios...";
+  elements.productPhotoLabel.textContent = isAccessory ? "Foto del accesorio (opcional)" : "Foto (opcional)";
+  elements.productSubmitButton.textContent = `Guardar ${isAccessory ? "accesorio" : "celular"}`;
+}
+
+function openProductDialog(product = null, category = "phone") {
   elements.productForm.reset();
   hideError(elements.productError);
   pendingPhoto = null;
   elements.productId.value = product?.id || "";
-  elements.productTitle.textContent = product ? "Editar celular" : "Agregar celular";
+  elements.productCategory.value = product?.category || category;
+  const isAccessory = elements.productCategory.value === "accessory";
+  elements.productTitle.textContent = `${product ? "Editar" : "Agregar"} ${isAccessory ? "accesorio" : "celular"}`;
   elements.productName.value = product?.name || "";
   elements.productCondition.value = product?.condition || "used";
   elements.productPrice.value = formatPriceInput(product?.price);
@@ -364,7 +430,10 @@ function openProductDialog(product = null) {
   elements.productCurrency.value = product?.currency || "ARS";
   elements.productBattery.value = product?.battery || "";
   elements.productGrade.value = product?.grade || "";
-  elements.photoFileName.textContent = product?.photo ? "Foto guardada · elegir otra para reemplazarla" : "Elegir una foto del celular";
+  updateProductCategoryFields();
+  elements.photoFileName.textContent = product?.photo
+    ? "Foto guardada · elegir otra para reemplazarla"
+    : `Elegir una foto ${isAccessory ? "del accesorio" : "del celular"}`;
   elements.photoPreview.hidden = !product?.photo;
   if (elements.photoPreview.src.startsWith("blob:")) URL.revokeObjectURL(elements.photoPreview.src);
   elements.photoPreview.src = product?.photo ? URL.createObjectURL(product.photo) : "";
@@ -378,7 +447,10 @@ function openSaleDialog(product) {
   hideError(elements.saleError);
   elements.saleProductId.value = product.id;
   elements.salePrice.value = formatPriceInput(product.price);
-  elements.saleProductSummary.textContent = `${product.name} · ${formatPrice(product.price, product.currency)}`;
+  const productType = product.category === "accessory"
+    ? "Accesorio"
+    : product.condition === "sealed" ? "Nuevo sellado" : "Usado seleccionado";
+  elements.saleProductSummary.textContent = `${product.name} · ${productType} · ${formatPrice(product.price, product.currency)}`;
   elements.saleDialog.showModal();
   document.querySelector("#management-panel").open = true;
   document.querySelector("#buyer-name").focus();
@@ -396,7 +468,7 @@ async function restoreProduct(product) {
     availableProduct.status = "available";
     await saveProduct(availableProduct);
     await refreshData();
-    notify("El celular volvió al inventario. El comprobante anterior se conservó.");
+    notify("El producto volvió al inventario. El comprobante anterior se conservó.");
   } catch (error) {
     notify(`No se pudo actualizar el inventario: ${error.message}`);
   }
@@ -407,6 +479,7 @@ function receiptLine(label, value) {
 }
 
 function openReceipt(receipt) {
+  const isAccessory = receipt.category === "accessory";
   elements.printReceipt.innerHTML = `
     <div class="receipt-brand"><strong>MR celulares</strong><p>Comprobante de venta</p></div>
     <div class="receipt-number"><span>N.º <strong>${escapeHtml(receipt.number)}</strong></span><span>${formatDate(receipt.soldAt)}</span></div>
@@ -417,8 +490,8 @@ function openReceipt(receipt) {
     ${receiptLine("Correo electrónico", receipt.buyer.email)}
     ${receiptLine("Domicilio", receipt.buyer.address)}
     <p class="eyebrow" style="margin-top:20px">DETALLE DE LA VENTA</p>
-    ${receiptLine("Celular", receipt.productName)}
-    ${receiptLine("Estado", receipt.condition === "sealed" ? "Nuevo sellado" : "Usado")}
+    ${receiptLine(isAccessory ? "Accesorio" : "Celular", receipt.productName)}
+    ${isAccessory ? "" : receiptLine("Estado", receipt.condition === "sealed" ? "Nuevo sellado" : "Usado")}
     ${receiptLine("Forma de pago", receipt.payment)}
     <div class="receipt-total"><span>Total</span><span>${formatPrice(receipt.salePrice, receipt.currency)}</span></div>
     <p class="receipt-thanks">Conserve este comprobante como constancia de la operación.</p>`;
@@ -735,6 +808,7 @@ updatePaymentGenerator();
 
 elements.addButton.addEventListener("click", () => openProductDialog());
 elements.emptyAddButton.addEventListener("click", () => openProductDialog());
+elements.productCategory.addEventListener("change", updateProductCategoryFields);
 elements.productPhoto.addEventListener("change", () => {
   const file = elements.productPhoto.files?.[0];
   if (!file) return;
@@ -762,16 +836,19 @@ elements.productForm.addEventListener("submit", async event => {
     return;
   }
   const existing = products.find(product => product.id === elements.productId.value);
-  const battery = elements.productBattery.value ? Number(elements.productBattery.value) : null;
+  const category = elements.productCategory.value;
+  const isAccessory = category === "accessory";
+  const battery = !isAccessory && elements.productBattery.value ? Number(elements.productBattery.value) : null;
   const product = {
     id: existing?.id || crypto.randomUUID(),
+    category,
     name: elements.productName.value.trim(),
-    condition: elements.productCondition.value,
+    condition: isAccessory ? "" : elements.productCondition.value,
     price,
     currency: elements.productCurrency.value,
-    brand: elements.productBrand.value,
+    brand: isAccessory ? "" : elements.productBrand.value,
     battery,
-    grade: elements.productGrade.value,
+    grade: isAccessory ? "" : elements.productGrade.value,
     description: elements.productDescription.value.trim(),
     photo: pendingPhoto || existing?.photo || null,
     photoUrl: existing?.photoUrl || "",
@@ -782,7 +859,9 @@ elements.productForm.addEventListener("submit", async event => {
     await saveProduct(product);
     await refreshData();
     elements.productDialog.close();
-    notify(existing ? "Celular actualizado." : "Celular agregado al inventario.");
+    notify(existing
+      ? `${isAccessory ? "Accesorio" : "Celular"} actualizado.`
+      : `${isAccessory ? "Accesorio" : "Celular"} agregado al inventario.`);
   } catch (error) {
     showError(elements.productError, `No se pudo guardar: ${error.message}`);
   }
@@ -794,7 +873,7 @@ elements.saleForm.addEventListener("submit", async event => {
   if (!elements.saleForm.reportValidity()) return;
   const product = products.find(item => item.id === elements.saleProductId.value);
   if (!product || product.status === "sold") {
-    showError(elements.saleError, "Este celular ya no está disponible. Actualiza el inventario e inténtalo de nuevo.");
+    showError(elements.saleError, "Este producto ya no está disponible. Actualiza el inventario e inténtalo de nuevo.");
     return;
   }
   const salePrice = parsePrice(elements.salePrice.value);
@@ -809,6 +888,7 @@ elements.saleForm.addEventListener("submit", async event => {
     soldAt,
     productId: product.id,
     productName: product.name,
+    category: product.category || "phone",
     condition: product.condition,
     salePrice,
     currency: product.currency || "ARS",
