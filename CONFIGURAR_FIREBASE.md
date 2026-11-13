@@ -1,6 +1,6 @@
 # Configuración de acceso y publicación
 
-Los clientes ven el catálogo público de celulares y accesorios. La edición de productos, las fotos, la gestión de ventas y las boletas solo aparecen para una cuenta administradora autorizada.
+La página abre en vista de cliente y muestra el catálogo público de celulares y accesorios. Una cuenta administradora autorizada puede alternar a la vista de administración; la edición, las fotos, la gestión de ventas y las boletas no aparecen en la vista de cliente.
 
 ## 1. Preparar Firebase
 

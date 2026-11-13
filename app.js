@@ -124,6 +124,7 @@ const elements = {
   paymentGenerator: document.querySelector("#payment-receipts"),
   adminOnlyLinks: document.querySelectorAll("[data-admin-only]"),
   adminLoginButton: document.querySelector("#admin-login-button"),
+  adminViewToggle: document.querySelector("#admin-view-toggle"),
   adminDialog: document.querySelector("#admin-login-dialog"),
   adminForm: document.querySelector("#admin-login-form"),
   adminEmail: document.querySelector("#admin-email"),
@@ -140,11 +141,12 @@ let pendingPhoto = null;
 let toastTimer;
 let catalogFilter = "all";
 let isAdmin = false;
+let isAdminView = false;
 let currentUser = null;
 let unsubscribeReceipts = null;
 
 async function saveProduct(product, photo = null) {
-  if (!isAdmin) throw new Error("Solo el administrador puede editar el inventario.");
+  if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede editar el inventario.");
 
   const previousPhotoPath = product.photoPath || "";
   let photoUrl = product.photoUrl || "";
@@ -173,7 +175,7 @@ async function saveProduct(product, photo = null) {
 }
 
 async function saveSale(product, receipt) {
-  if (!isAdmin) throw new Error("Solo el administrador puede registrar ventas.");
+  if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede registrar ventas.");
   const batch = writeBatch(db);
   batch.update(doc(db, "products", product.id), { status: "sold", soldAt: receipt.soldAt });
   batch.set(doc(db, "receipts", receipt.id), receipt);
@@ -181,7 +183,7 @@ async function saveSale(product, receipt) {
 }
 
 async function deleteProduct(product) {
-  if (!isAdmin) throw new Error("Solo el administrador puede quitar productos.");
+  if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede quitar productos.");
   await deleteDoc(doc(db, "products", product.id));
   if (product.photoPath) {
     try {
@@ -195,7 +197,7 @@ async function deleteProduct(product) {
 }
 
 async function deleteReceipt(receipt) {
-  if (!isAdmin) throw new Error("Solo el administrador puede quitar comprobantes.");
+  if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede quitar comprobantes.");
   await deleteDoc(doc(db, "receipts", receipt.id));
   notify("Comprobante eliminado.");
 }
@@ -290,12 +292,25 @@ function render() {
 }
 
 function syncAdminUI() {
+  const showAdminView = isAdmin && isAdminView;
   elements.adminOnlyLinks.forEach(element => {
-    element.hidden = !isAdmin;
+    element.hidden = !showAdminView;
   });
   elements.adminLoginButton.textContent = isAdmin ? "Cerrar sesión" : "Acceso administrador";
   elements.adminLoginButton.setAttribute("aria-label", elements.adminLoginButton.textContent);
-  if (!isAdmin) elements.managementPanel.open = false;
+  elements.adminViewToggle.hidden = !isAdmin;
+  elements.adminViewToggle.textContent = isAdminView ? "Vista cliente" : "Vista administrador";
+  elements.adminViewToggle.setAttribute("aria-pressed", String(isAdminView));
+  if (showAdminView) {
+    if (!unsubscribeReceipts) listenForReceipts();
+  } else {
+    if (unsubscribeReceipts) {
+      unsubscribeReceipts();
+      unsubscribeReceipts = null;
+    }
+    receipts = [];
+    elements.managementPanel.open = false;
+  }
   render();
 }
 
@@ -328,6 +343,7 @@ function listenForReceipts() {
 async function handleAuthState(user) {
   currentUser = user;
   isAdmin = false;
+  isAdminView = false;
   receipts = [];
   if (unsubscribeReceipts) {
     unsubscribeReceipts();
@@ -351,7 +367,6 @@ async function handleAuthState(user) {
 
     isAdmin = true;
     syncAdminUI();
-    listenForReceipts();
   } catch (error) {
     if (currentUser?.uid !== user.uid) return;
     const message = `No se pudo verificar el acceso de administrador: ${error.message}`;
@@ -459,7 +474,7 @@ function createProductCard(product) {
       <p class="product-price">${formatPrice(product.price, product.currency)}<span>${product.currency === "USD" ? "USD" : "ARS"}</span></p>
       <p class="product-price-note">${product.priceNote ? escapeHtml(product.priceNote) : "Precio contado · Consultá financiación"}</p>
       <a class="button button-whatsapp product-contact whatsapp-link ${isSold ? "is-sold" : ""}" href="#" data-message="Hola, quiero consultar por el ${isAccessory ? "accesorio" : "celular"} ${escapeHtml(product.name)}. ¿Sigue disponible?">Consultar este ${isAccessory ? "accesorio" : "equipo"} <span aria-hidden="true">↗</span></a>
-      ${isAdmin ? `<div class="product-owner-actions">
+      ${isAdmin && isAdminView ? `<div class="product-owner-actions">
         ${isSold
           ? '<button class="small-button restore-button" data-action="restore">Volver a stock</button>'
           : '<button class="small-button" data-action="edit">Editar</button><button class="small-button sell-button" data-action="sell">Registrar venta</button>'}
@@ -588,7 +603,7 @@ function createReceiptNumber(date) {
 
 async function restoreProduct(product) {
   try {
-    if (!isAdmin) throw new Error("Solo el administrador puede actualizar el inventario.");
+    if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede actualizar el inventario.");
     await updateDoc(doc(db, "products", product.id), {
       status: "available",
       soldAt: deleteField()
@@ -947,6 +962,11 @@ elements.adminLoginButton.addEventListener("click", async () => {
   elements.adminDialog.showModal();
   elements.adminEmail.focus();
 });
+elements.adminViewToggle.addEventListener("click", () => {
+  if (!isAdmin) return;
+  isAdminView = !isAdminView;
+  syncAdminUI();
+});
 elements.adminForm.addEventListener("submit", async event => {
   event.preventDefault();
   hideError(elements.adminError);
@@ -965,6 +985,8 @@ elements.adminForm.addEventListener("submit", async event => {
       showError(elements.adminError, "Esta cuenta no tiene permisos de administrador.");
       return;
     }
+    isAdminView = true;
+    syncAdminUI();
     elements.adminDialog.close();
     elements.adminForm.reset();
     notify("Sesión de administrador iniciada.");

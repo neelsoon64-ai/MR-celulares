@@ -445,6 +445,7 @@ body { min-width: 320px; background: #09090b; color: #f4f7fb; }
 .site-nav { gap: 24px; margin-right: 25px; }
 .site-nav a, .site-nav button { color: #b6bfcc; font-size: 11px; transition: color .18s ease; }
 .site-nav a:hover, .site-nav button:hover { color: #fff; }
+.site-nav .admin-view-toggle { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; white-space: nowrap; cursor: pointer; }
 .button { min-height: 43px; border-radius: 9px; font-size: 11px; transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease; }
 .button-primary { background: #3b82f6; color: white; }
 .button-primary:hover { background: #2563eb; box-shadow: 0 7px 25px rgba(59,130,246,.23); }
@@ -683,6 +684,7 @@ main { padding: 28px 0 32px; }
   .site-nav { position: absolute; top: 69px; right: 17px; left: 17px; display: none; align-items: stretch; gap: 0; padding: 8px 15px; margin: 0; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(14,18,27,.97); box-shadow: 0 16px 45px rgba(0,0,0,.45); }
   .site-nav.is-open { display: flex; flex-direction: column; }
   .site-nav a { padding: 13px 2px; border-bottom: 1px solid rgba(255,255,255,.06); color: #d3dce8; font-size: 11px; }
+  .site-nav .admin-view-toggle { padding: 13px 2px; border-bottom: 1px solid rgba(255,255,255,.06); color: #d3dce8; font-size: 11px; text-align: left; }
   .site-nav a:last-child { border-bottom: 0; }
   .nav-cta { margin-left: auto; }
   .hero { min-height: 470px; grid-template-columns: 1fr .82fr; }
