@@ -1,6 +1,6 @@
 # Configuración de acceso y publicación
 
-El catálogo es público. La edición de productos, las fotos, la gestión de ventas y las boletas quedan limitadas a una cuenta administradora.
+Los clientes ven el catálogo público de celulares y accesorios. La edición de productos, las fotos, la gestión de ventas y las boletas solo aparecen para una cuenta administradora autorizada.
 
 ## 1. Preparar Firebase
 
@@ -17,7 +17,7 @@ En el proyecto Firebase que corresponde a las variables `VITE_FIREBASE_*` del ar
    npx firebase-tools deploy --project ID_DEL_PROYECTO --only firestore:rules,storage
    ```
 
-El primer inicio de sesión del administrador importa el inventario y las boletas guardados en el navegador anterior si la nube todavía está vacía.
+El catálogo se comparte entre todos los visitantes mediante Cloud Firestore. Las reglas permiten que cualquier visitante lea productos, pero solo el UID guardado en `admins/{UID}` puede modificarlos. Los comprobantes permanecen privados para administradores.
 
 ## 2. Publicar en GitHub Pages
 

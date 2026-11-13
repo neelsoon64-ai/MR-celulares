@@ -5,7 +5,6 @@ import {
   deleteField,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
   setDoc,
   updateDoc,
@@ -19,19 +18,12 @@ import {
 } from "firebase/storage";
 import { auth, db, storage } from "./src/firebase.js";
 
-const DB_NAME = "mr-celulares-db";
-const DB_VERSION = 1;
-const PRODUCT_STORE = "products";
-const RECEIPT_STORE = "receipts";
 const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804397759";
 const INSTAGRAM_URL = "";
 const TIKTOK_URL = "";
-// Optional first-load catalog: name, brand, condition, price, currency, battery, grade, description, photoUrl.
-const INITIAL_PRODUCTS = [];
-
 const elements = {
   addButton: document.querySelector("#add-product-button"),
   emptyAddButton: document.querySelector("#empty-add-button"),
@@ -127,8 +119,7 @@ const elements = {
   receiptWarranty: document.querySelector("#receipt-warranty"),
   sendReceiptWhatsapp: document.querySelector("#send-receipt-whatsapp"),
   printGeneratorReceipt: document.querySelector("#print-generator-receipt"),
-  toast: document.querySelector("#toast")
-  ,
+  toast: document.querySelector("#toast"),
   managementPanel: document.querySelector("#management-panel"),
   paymentGenerator: document.querySelector("#payment-receipts"),
   adminOnlyLinks: document.querySelectorAll("[data-admin-only]"),
@@ -143,7 +134,6 @@ const elements = {
   receiptError: document.querySelector("#receipt-error")
 };
 
-let database;
 let products = [];
 let receipts = [];
 let pendingPhoto = null;
@@ -151,32 +141,9 @@ let toastTimer;
 let catalogFilter = "all";
 let isAdmin = false;
 let currentUser = null;
-let unsubscribeProducts = null;
 let unsubscribeReceipts = null;
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(PRODUCT_STORE)) db.createObjectStore(PRODUCT_STORE, { keyPath: "id" });
-      if (!db.objectStoreNames.contains(RECEIPT_STORE)) db.createObjectStore(RECEIPT_STORE, { keyPath: "id" });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("No se pudo abrir la base de datos."));
-    request.onblocked = () => reject(new Error("Cierra otras pestañas de esta página y vuelve a intentarlo."));
-  });
-}
-
-function getAll(storeName) {
-  return new Promise((resolve, reject) => {
-    const request = database.transaction(storeName, "readonly").objectStore(storeName).getAll();
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("No se pudieron leer los datos."));
-  });
-}
-
-async function saveProduct(product, photo = null, stablePhotoPath = false) {
+async function saveProduct(product, photo = null) {
   if (!isAdmin) throw new Error("Solo el administrador puede editar el inventario.");
 
   const previousPhotoPath = product.photoPath || "";
@@ -187,9 +154,7 @@ async function saveProduct(product, photo = null, stablePhotoPath = false) {
       throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 8 MB.");
     }
     const safeName = photo.name.replace(/[^\w.-]/g, "_");
-    const path = stablePhotoPath
-      ? `products/${product.id}/legacy-${safeName}`
-      : `products/${product.id}/${crypto.randomUUID()}-${safeName}`;
+    const path = `products/${product.id}/${crypto.randomUUID()}-${safeName}`;
     const uploaded = await uploadBytes(ref(storage, path), photo, { contentType: photo.type });
     photoPath = uploaded.ref.fullPath;
     photoUrl = await getDownloadURL(uploaded.ref);
@@ -322,6 +287,82 @@ function render() {
   elements.tabReceiptCount.textContent = receipts.length;
   renderProducts();
   renderReceipts();
+}
+
+function syncAdminUI() {
+  elements.adminOnlyLinks.forEach(element => {
+    element.hidden = !isAdmin;
+  });
+  elements.adminLoginButton.textContent = isAdmin ? "Cerrar sesión" : "Acceso administrador";
+  elements.adminLoginButton.setAttribute("aria-label", elements.adminLoginButton.textContent);
+  if (!isAdmin) elements.managementPanel.open = false;
+  render();
+}
+
+function listenForProducts() {
+  onSnapshot(collection(db, "products"), snapshot => {
+    products = snapshot.docs.map(productDocument => ({
+      ...productDocument.data(),
+      id: productDocument.id
+    }));
+    hideError(elements.catalogError);
+    render();
+  }, error => {
+    showError(elements.catalogError, `No se pudo cargar el catálogo: ${error.message}`);
+  });
+}
+
+function listenForReceipts() {
+  if (unsubscribeReceipts) unsubscribeReceipts();
+  unsubscribeReceipts = onSnapshot(collection(db, "receipts"), snapshot => {
+    receipts = snapshot.docs
+      .map(receiptDocument => ({ ...receiptDocument.data(), id: receiptDocument.id }))
+      .sort((a, b) => b.soldAt - a.soldAt);
+    hideError(elements.receiptError);
+    render();
+  }, error => {
+    showError(elements.receiptError, `No se pudieron cargar los comprobantes: ${error.message}`);
+  });
+}
+
+async function handleAuthState(user) {
+  currentUser = user;
+  isAdmin = false;
+  receipts = [];
+  if (unsubscribeReceipts) {
+    unsubscribeReceipts();
+    unsubscribeReceipts = null;
+  }
+  syncAdminUI();
+  if (!user) return;
+
+  try {
+    const adminDocument = await getDoc(doc(db, "admins", user.uid));
+    if (currentUser?.uid !== user.uid) return;
+    if (!adminDocument.exists()) {
+      if (elements.adminDialog.open) {
+        showError(elements.adminError, "Esta cuenta no tiene permisos de administrador.");
+      } else {
+        notify("Esta cuenta no tiene permisos de administrador.");
+      }
+      await signOut(auth);
+      return;
+    }
+
+    isAdmin = true;
+    syncAdminUI();
+    listenForReceipts();
+  } catch (error) {
+    if (currentUser?.uid !== user.uid) return;
+    const message = `No se pudo verificar el acceso de administrador: ${error.message}`;
+    if (elements.adminDialog.open) showError(elements.adminError, message);
+    else notify(message);
+    try {
+      await signOut(auth);
+    } catch (signOutError) {
+      notify(`No se pudo cerrar la sesión: ${signOutError.message}`);
+    }
+  }
 }
 
 function renderProducts() {
@@ -547,6 +588,7 @@ function createReceiptNumber(date) {
 
 async function restoreProduct(product) {
   try {
+    if (!isAdmin) throw new Error("Solo el administrador puede actualizar el inventario.");
     await updateDoc(doc(db, "products", product.id), {
       status: "available",
       soldAt: deleteField()
@@ -891,6 +933,47 @@ updatePaymentGenerator();
 
 elements.addButton.addEventListener("click", () => openProductDialog());
 elements.emptyAddButton.addEventListener("click", () => openProductDialog());
+elements.adminLoginButton.addEventListener("click", async () => {
+  if (isAdmin) {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      notify(`No se pudo cerrar la sesión: ${error.message}`);
+    }
+    return;
+  }
+  elements.adminForm.reset();
+  hideError(elements.adminError);
+  elements.adminDialog.showModal();
+  elements.adminEmail.focus();
+});
+elements.adminForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  hideError(elements.adminError);
+  if (!elements.adminForm.reportValidity()) return;
+
+  elements.adminSubmitButton.disabled = true;
+  try {
+    const credential = await signInWithEmailAndPassword(
+      auth,
+      elements.adminEmail.value.trim(),
+      elements.adminPassword.value
+    );
+    const adminDocument = await getDoc(doc(db, "admins", credential.user.uid));
+    if (!adminDocument.exists()) {
+      await signOut(auth);
+      showError(elements.adminError, "Esta cuenta no tiene permisos de administrador.");
+      return;
+    }
+    elements.adminDialog.close();
+    elements.adminForm.reset();
+    notify("Sesión de administrador iniciada.");
+  } catch (error) {
+    showError(elements.adminError, `No se pudo iniciar sesión: ${error.message}`);
+  } finally {
+    elements.adminSubmitButton.disabled = false;
+  }
+});
 elements.productCategory.addEventListener("change", updateProductCategoryFields);
 elements.productPhoto.addEventListener("change", () => {
   const file = elements.productPhoto.files?.[0];
@@ -1178,25 +1261,7 @@ document.querySelectorAll(".dialog").forEach(dialog => {
   });
 });
 
-openDatabase()
-  .then(async db => {
-    database = db;
-    if ((await getAll(PRODUCT_STORE)).length === 0 && INITIAL_PRODUCTS.length > 0) {
-      for (const product of INITIAL_PRODUCTS) {
-        await saveProduct({
-          ...product,
-          id: product.id || crypto.randomUUID(),
-          status: product.status || "available",
-          createdAt: product.createdAt || Date.now()
-        });
-      }
-    }
-    return refreshData();
-  })
-  .catch(error => {
-    document.querySelector("main").innerHTML = `
-      <section class="empty-state">
-        <h2>No se pudo iniciar la página</h2>
-        <p>${escapeHtml(error.message)} Prueba a abrirla en un navegador actualizado y vuelve a cargar.</p>
-      </section>`;
-  });
+listenForProducts();
+onAuthStateChanged(auth, user => {
+  void handleAuthState(user);
+});
