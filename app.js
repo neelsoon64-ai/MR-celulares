@@ -22,7 +22,6 @@ const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804397759";
-const INSTAGRAM_URL = "";
 const FACEBOOK_URL = "";
 const elements = {
   addButton: document.querySelector("#add-product-button"),
@@ -1148,23 +1147,6 @@ function attachWhatsApp(link) {
 }
 
 document.querySelectorAll(".whatsapp-link").forEach(attachWhatsApp);
-[
-  [".instagram-link", INSTAGRAM_URL],
-  [".tiktok-link", TIKTOK_URL]
-].forEach(([selector, url]) => {
-  document.querySelectorAll(selector).forEach(link => {
-    link.href = url || "#";
-    if (url) {
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-    } else {
-      link.addEventListener("click", event => {
-        event.preventDefault();
-        notify(`Agregá el enlace de ${link.dataset.social} en app.js para conectar el perfil.`);
-      });
-    }
-  });
-});
 document.querySelector("#trade-form").addEventListener("submit", event => {
   event.preventDefault();
   const brand = document.querySelector("#trade-brand").value;
