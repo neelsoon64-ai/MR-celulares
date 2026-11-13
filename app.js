@@ -1,7 +1,30 @@
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  writeBatch
+} from "firebase/firestore";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes
+} from "firebase/storage";
+import { auth, db, storage } from "./src/firebase.js";
+
 const DB_NAME = "mr-celulares-db";
 const DB_VERSION = 1;
 const PRODUCT_STORE = "products";
 const RECEIPT_STORE = "receipts";
+const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804397759";
 const INSTAGRAM_URL = "";
@@ -105,6 +128,19 @@ const elements = {
   sendReceiptWhatsapp: document.querySelector("#send-receipt-whatsapp"),
   printGeneratorReceipt: document.querySelector("#print-generator-receipt"),
   toast: document.querySelector("#toast")
+  ,
+  managementPanel: document.querySelector("#management-panel"),
+  paymentGenerator: document.querySelector("#payment-receipts"),
+  adminOnlyLinks: document.querySelectorAll("[data-admin-only]"),
+  adminLoginButton: document.querySelector("#admin-login-button"),
+  adminDialog: document.querySelector("#admin-login-dialog"),
+  adminForm: document.querySelector("#admin-login-form"),
+  adminEmail: document.querySelector("#admin-email"),
+  adminPassword: document.querySelector("#admin-password"),
+  adminError: document.querySelector("#admin-error"),
+  adminSubmitButton: document.querySelector("#admin-submit-button"),
+  catalogError: document.querySelector("#catalog-error"),
+  receiptError: document.querySelector("#receipt-error")
 };
 
 let database;
@@ -113,6 +149,10 @@ let receipts = [];
 let pendingPhoto = null;
 let toastTimer;
 let catalogFilter = "all";
+let isAdmin = false;
+let currentUser = null;
+let unsubscribeProducts = null;
+let unsubscribeReceipts = null;
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -136,25 +176,63 @@ function getAll(storeName) {
   });
 }
 
-function saveProduct(product) {
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(PRODUCT_STORE, "readwrite");
-    transaction.objectStore(PRODUCT_STORE).put(product);
-    transaction.oncomplete = resolve;
-    transaction.onerror = () => reject(transaction.error || new Error("No se pudo guardar el celular."));
-    transaction.onabort = () => reject(transaction.error || new Error("No se pudo guardar el celular."));
-  });
+async function saveProduct(product, photo = null, stablePhotoPath = false) {
+  if (!isAdmin) throw new Error("Solo el administrador puede editar el inventario.");
+
+  const previousPhotoPath = product.photoPath || "";
+  let photoUrl = product.photoUrl || "";
+  let photoPath = previousPhotoPath;
+  if (photo) {
+    if (!ALLOWED_PHOTO_TYPES.includes(photo.type) || photo.size > MAX_PHOTO_SIZE) {
+      throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 8 MB.");
+    }
+    const safeName = photo.name.replace(/[^\w.-]/g, "_");
+    const path = stablePhotoPath
+      ? `products/${product.id}/legacy-${safeName}`
+      : `products/${product.id}/${crypto.randomUUID()}-${safeName}`;
+    const uploaded = await uploadBytes(ref(storage, path), photo, { contentType: photo.type });
+    photoPath = uploaded.ref.fullPath;
+    photoUrl = await getDownloadURL(uploaded.ref);
+  }
+
+  const { photo: localPhoto, ...cloudProduct } = product;
+  await setDoc(doc(db, "products", product.id), { ...cloudProduct, photoPath, photoUrl });
+
+  if (photo && previousPhotoPath && previousPhotoPath !== photoPath) {
+    try {
+      await deleteObject(ref(storage, previousPhotoPath));
+    } catch (error) {
+      notify(`Producto guardado, pero no se pudo quitar la foto anterior: ${error.message}`);
+    }
+  }
 }
 
-function saveSale(product, receipt) {
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction([PRODUCT_STORE, RECEIPT_STORE], "readwrite");
-    transaction.objectStore(PRODUCT_STORE).put({ ...product, status: "sold", soldAt: receipt.soldAt });
-    transaction.objectStore(RECEIPT_STORE).add(receipt);
-    transaction.oncomplete = resolve;
-    transaction.onerror = () => reject(transaction.error || new Error("No se pudo registrar la venta."));
-    transaction.onabort = () => reject(transaction.error || new Error("No se pudo registrar la venta."));
-  });
+async function saveSale(product, receipt) {
+  if (!isAdmin) throw new Error("Solo el administrador puede registrar ventas.");
+  const batch = writeBatch(db);
+  batch.update(doc(db, "products", product.id), { status: "sold", soldAt: receipt.soldAt });
+  batch.set(doc(db, "receipts", receipt.id), receipt);
+  await batch.commit();
+}
+
+async function deleteProduct(product) {
+  if (!isAdmin) throw new Error("Solo el administrador puede quitar productos.");
+  await deleteDoc(doc(db, "products", product.id));
+  if (product.photoPath) {
+    try {
+      await deleteObject(ref(storage, product.photoPath));
+    } catch (error) {
+      notify(`Producto eliminado, pero no se pudo quitar su foto: ${error.message}`);
+      return;
+    }
+  }
+  notify("Producto eliminado del catálogo.");
+}
+
+async function deleteReceipt(receipt) {
+  if (!isAdmin) throw new Error("Solo el administrador puede quitar comprobantes.");
+  await deleteDoc(doc(db, "receipts", receipt.id));
+  notify("Comprobante eliminado.");
 }
 
 function formatPrice(value, currency = "ARS") {
@@ -234,16 +312,6 @@ function showError(element, message) {
 function hideError(element) {
   element.textContent = "";
   element.hidden = true;
-}
-
-async function refreshData() {
-  [products, receipts] = await Promise.all([
-    getAll(PRODUCT_STORE),
-    getAll(RECEIPT_STORE)
-  ]);
-  products.sort((a, b) => b.createdAt - a.createdAt);
-  receipts.sort((a, b) => b.soldAt - a.soldAt);
-  render();
 }
 
 function render() {
@@ -326,8 +394,7 @@ function createProductCard(product) {
   const isSealed = !isAccessory && product.condition === "sealed";
   const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO SELLADO" : "USADO SELECCIONADO";
   const conditionClass = isAccessory ? "accessory" : isSealed ? "sealed" : "used";
-  const photoObjectUrl = product.photo instanceof Blob ? URL.createObjectURL(product.photo) : null;
-  const photoUrl = photoObjectUrl || product.photoUrl || "";
+  const photoUrl = product.photoUrl || "";
   const photo = photoUrl
     ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(product.name)}">`
     : isAccessory
@@ -351,11 +418,12 @@ function createProductCard(product) {
       <p class="product-price">${formatPrice(product.price, product.currency)}<span>${product.currency === "USD" ? "USD" : "ARS"}</span></p>
       <p class="product-price-note">${product.priceNote ? escapeHtml(product.priceNote) : "Precio contado · Consultá financiación"}</p>
       <a class="button button-whatsapp product-contact whatsapp-link ${isSold ? "is-sold" : ""}" href="#" data-message="Hola, quiero consultar por el ${isAccessory ? "accesorio" : "celular"} ${escapeHtml(product.name)}. ¿Sigue disponible?">Consultar este ${isAccessory ? "accesorio" : "equipo"} <span aria-hidden="true">↗</span></a>
-      <div class="product-owner-actions">
+      ${isAdmin ? `<div class="product-owner-actions">
         ${isSold
           ? '<button class="small-button restore-button" data-action="restore">Volver a stock</button>'
           : '<button class="small-button" data-action="edit">Editar</button><button class="small-button sell-button" data-action="sell">Registrar venta</button>'}
-      </div>
+        <button class="small-button delete-button" data-action="delete">Eliminar</button>
+      </div>` : ""}
     </div>`;
   card.querySelectorAll("[data-action]").forEach(button => {
     button.addEventListener("click", event => {
@@ -363,11 +431,14 @@ function createProductCard(product) {
       if (action === "edit") openProductDialog(product);
       if (action === "sell") openSaleDialog(product);
       if (action === "restore") restoreProduct(product);
+      if (action === "delete") {
+        if (window.confirm(`¿Eliminar ${product.name} del catálogo?`)) {
+          deleteProduct(product).catch(error => notify(`No se pudo eliminar: ${error.message}`));
+        }
+      }
       if (action === "sell") document.querySelector("#management-panel").open = true;
     });
   });
-  const image = card.querySelector(".product-image img");
-  if (photoObjectUrl) image?.addEventListener("load", () => URL.revokeObjectURL(photoObjectUrl), { once: true });
   card.querySelectorAll(".whatsapp-link").forEach(link => attachWhatsApp(link));
   return card;
 }
@@ -385,8 +456,16 @@ function renderReceipts() {
       <div class="receipt-main"><strong>${escapeHtml(receipt.productName)}</strong><span>${escapeHtml(receipt.number)} · ${formatDate(receipt.soldAt)}</span></div>
       <div class="receipt-detail"><strong>${escapeHtml(receipt.buyer.name)}</strong><span>Comprador</span></div>
       <div class="receipt-amount">${formatPrice(receipt.salePrice, receipt.currency)}</div>
-      <button class="small-button" type="button">Ver comprobante</button>`;
-    row.querySelector("button").addEventListener("click", () => openReceipt(receipt));
+      <div class="receipt-actions">
+        <button class="small-button" type="button" data-action="view">Ver comprobante</button>
+        <button class="small-button delete-button" type="button" data-action="delete">Eliminar</button>
+      </div>`;
+    row.querySelector('[data-action="view"]').addEventListener("click", () => openReceipt(receipt));
+    row.querySelector('[data-action="delete"]').addEventListener("click", () => {
+      if (window.confirm(`¿Eliminar el comprobante ${receipt.number}?`)) {
+        deleteReceipt(receipt).catch(error => notify(`No se pudo eliminar el comprobante: ${error.message}`));
+      }
+    });
     elements.receiptList.append(row);
   });
   elements.receiptsEmpty.hidden = receipts.length > 0;
@@ -431,13 +510,17 @@ function openProductDialog(product = null, category = "phone") {
   elements.productBattery.value = product?.battery || "";
   elements.productGrade.value = product?.grade || "";
   updateProductCategoryFields();
-  elements.photoFileName.textContent = product?.photo
+  const existingPhotoUrl = product?.photoUrl
+    || (product?.photo instanceof Blob ? URL.createObjectURL(product.photo) : "");
+  elements.photoFileName.textContent = existingPhotoUrl
     ? "Foto guardada · elegir otra para reemplazarla"
     : `Elegir una foto ${isAccessory ? "del accesorio" : "del celular"}`;
-  elements.photoPreview.hidden = !product?.photo;
+  elements.photoPreview.hidden = !existingPhotoUrl;
   if (elements.photoPreview.src.startsWith("blob:")) URL.revokeObjectURL(elements.photoPreview.src);
-  elements.photoPreview.src = product?.photo ? URL.createObjectURL(product.photo) : "";
-  if (product?.photo) elements.photoPreview.onload = () => URL.revokeObjectURL(elements.photoPreview.src);
+  elements.photoPreview.src = existingPhotoUrl;
+  if (existingPhotoUrl.startsWith("blob:")) {
+    elements.photoPreview.onload = () => URL.revokeObjectURL(elements.photoPreview.src);
+  }
   elements.productDialog.showModal();
   elements.productName.focus();
 }
@@ -464,10 +547,10 @@ function createReceiptNumber(date) {
 
 async function restoreProduct(product) {
   try {
-    const { soldAt, ...availableProduct } = product;
-    availableProduct.status = "available";
-    await saveProduct(availableProduct);
-    await refreshData();
+    await updateDoc(doc(db, "products", product.id), {
+      status: "available",
+      soldAt: deleteField()
+    });
     notify("El producto volvió al inventario. El comprobante anterior se conservó.");
   } catch (error) {
     notify(`No se pudo actualizar el inventario: ${error.message}`);
@@ -812,8 +895,8 @@ elements.productCategory.addEventListener("change", updateProductCategoryFields)
 elements.productPhoto.addEventListener("change", () => {
   const file = elements.productPhoto.files?.[0];
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
-    showError(elements.productError, "El archivo seleccionado no es una imagen.");
+  if (!ALLOWED_PHOTO_TYPES.includes(file.type) || file.size > MAX_PHOTO_SIZE) {
+    showError(elements.productError, "Elegí una foto JPG, PNG o WebP de hasta 8 MB.");
     elements.productPhoto.value = "";
     return;
   }
@@ -850,14 +933,14 @@ elements.productForm.addEventListener("submit", async event => {
     battery,
     grade: isAccessory ? "" : elements.productGrade.value,
     description: elements.productDescription.value.trim(),
-    photo: pendingPhoto || existing?.photo || null,
     photoUrl: existing?.photoUrl || "",
+    photoPath: existing?.photoPath || "",
     status: existing?.status || "available",
     createdAt: existing?.createdAt || Date.now()
   };
   try {
-    await saveProduct(product);
-    await refreshData();
+    await saveProduct(product, pendingPhoto);
+    pendingPhoto = null;
     elements.productDialog.close();
     notify(existing
       ? `${isAccessory ? "Accesorio" : "Celular"} actualizado.`
@@ -903,7 +986,6 @@ elements.saleForm.addEventListener("submit", async event => {
   };
   try {
     await saveSale(product, receipt);
-    await refreshData();
     elements.saleDialog.close();
     openReceipt(receipt);
     notify("Venta registrada y comprobante guardado.");

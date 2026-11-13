@@ -7,7 +7,7 @@
   <meta name="description" content="MR Celulares: comprobantes de pago y catálogo de celulares y accesorios.">
   <title>MR Celulares | Celulares y accesorios</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -27,11 +27,12 @@
       <a class="button button-whatsapp nav-cta whatsapp-link" href="#" data-message="Hola, quiero consultar por los celulares disponibles.">
         <span class="whatsapp-icon" aria-hidden="true">◉</span><span>Consultar por WhatsApp</span>
       </a>
+      <button class="button admin-access-button" id="admin-login-button" type="button">Acceso administrador</button>
       <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">☰</button>
     </header>
 
     <main>
-      <section class="payment-generator" id="payment-receipts" aria-labelledby="payment-generator-title">
+      <section class="payment-generator" id="payment-receipts" aria-labelledby="payment-generator-title" data-admin-only hidden>
         <div class="generator-heading">
           <div>
             <p class="generator-eyebrow"><span class="generator-live-dot"></span> HERRAMIENTA DE VENTAS</p>
@@ -217,6 +218,7 @@
           <span class="catalog-note">Stock actualizado · Consultá disponibilidad</span>
         </div>
         <div class="product-grid" id="product-grid"></div>
+        <p class="form-error catalog-error" id="catalog-error" role="alert" hidden></p>
         <div class="empty-state" id="inventory-empty" hidden>
           <div class="empty-icon" aria-hidden="true">▧</div>
           <h2 id="inventory-empty-title">Próximamente, nuevos equipos.</h2>
@@ -258,7 +260,7 @@
         </div>
       </section>
 
-      <details class="management-panel" id="management-panel">
+      <details class="management-panel" id="management-panel" data-admin-only hidden>
         <summary>Gestión de inventario y ventas</summary>
         <section class="stats" aria-label="Resumen del inventario">
           <article class="stat-card"><span>En stock</span><strong id="stock-count">0</strong><small>disponibles para vender</small></article>
@@ -267,7 +269,7 @@
         </section>
         <div class="management-actions"><button class="button button-primary" id="add-product-button" type="button"><span aria-hidden="true">＋</span> Agregar producto</button><button class="tab" id="inventory-tab" type="button" aria-selected="true">Inventario</button><button class="tab" id="receipts-tab" type="button" aria-selected="false">Comprobantes <span class="tab-count" id="tab-receipt-count">0</span></button></div>
         <label class="select-wrap management-filter"><span>Ver estado:</span><select id="status-filter"><option value="available">En stock</option><option value="all">Todos</option><option value="sold">Vendidos</option></select></label>
-        <section id="receipts-view" hidden><div class="section-intro"><div><h2>Comprobantes de venta</h2><p class="muted">Consulta los datos del comprador o imprime una copia.</p></div></div><div class="receipt-list" id="receipt-list"></div><div class="empty-state" id="receipts-empty" hidden><h2>Aún no hay comprobantes</h2><p>Cuando registres una venta, su comprobante aparecerá aquí.</p></div></section>
+        <section id="receipts-view" hidden><div class="section-intro"><div><h2>Comprobantes de venta</h2><p class="muted">Consulta los datos del comprador o imprime una copia.</p></div></div><p class="form-error" id="receipt-error" role="alert" hidden></p><div class="receipt-list" id="receipt-list"></div><div class="empty-state" id="receipts-empty" hidden><h2>Aún no hay comprobantes</h2><p>Cuando registres una venta, su comprobante aparecerá aquí.</p></div></section>
       </details>
     </main>
     <footer class="site-footer" id="ubicacion">
@@ -276,9 +278,27 @@
         <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a><a href="#inventory-view" data-filter-link="used">Usados seleccionados</a><a href="#inventory-view" data-filter-link="accessories">Accesorios</a><a href="#plan-canje">Plan Canje</a><a href="#garantia">Garantía</a></div>
         <div class="footer-column"><h3>Estamos para ayudarte</h3><span>Atención: coordiná tu horario</span><span>Entregas a coordinar</span><span>Consultá por tu zona</span><a class="footer-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar horarios y zona de entrega.">Escribinos por WhatsApp ↗</a><a class="instagram-link" data-social="Instagram" href="#">Instagram ↗</a><a class="tiktok-link" data-social="TikTok" href="#">TikTok ↗</a></div>
       </div>
-      <div class="footer-bottom"><span>© <span id="current-year"></span> MR Celulares</span><span>Los datos del inventario se guardan en este dispositivo.</span></div>
+      <div class="footer-bottom"><span>© <span id="current-year"></span> MR Celulares</span><span>Stock actualizado en línea.</span></div>
     </footer>
   </div>
+
+  <dialog class="dialog" id="admin-login-dialog">
+    <form class="dialog-card" id="admin-login-form">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">ACCESO PRIVADO</p><h2>Administración</h2></div>
+        <button class="icon-button" type="button" data-close="admin-login-dialog" aria-label="Cerrar">×</button>
+      </div>
+      <label class="field-label" for="admin-email">Correo electrónico</label>
+      <input class="text-input" id="admin-email" name="email" type="email" autocomplete="username" required>
+      <label class="field-label" for="admin-password">Contraseña</label>
+      <input class="text-input" id="admin-password" name="password" type="password" autocomplete="current-password" required>
+      <p class="form-error" id="admin-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button button-quiet" type="button" data-close="admin-login-dialog">Cancelar</button>
+        <button class="button button-primary" id="admin-submit-button" type="submit">Ingresar</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog class="dialog" id="product-dialog">
     <form id="product-form" class="dialog-card" novalidate>
