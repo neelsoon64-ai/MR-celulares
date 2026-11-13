@@ -1,28 +1,59 @@
-# Configuración de acceso y publicación
+# Configuración de Firebase, Cloudinary y Vercel
 
-La página abre en vista de cliente y muestra el catálogo público de celulares y accesorios. Una cuenta administradora autorizada puede alternar a la vista de administración; la edición, las fotos, la gestión de ventas y las boletas no aparecen en la vista de cliente.
+La tienda usa Firebase Authentication para el acceso privado, Cloud Firestore para el catálogo y Cloudinary para las fotos. Las funciones de firma y borrado de fotos se ejecutan en Vercel; no se usa Firebase Storage para las nuevas cargas.
 
 ## 1. Preparar Firebase
 
-En el proyecto Firebase que corresponde a las variables `VITE_FIREBASE_*` del archivo `.env`:
+En el proyecto Firebase correspondiente a las variables `VITE_FIREBASE_*`:
 
 1. En **Authentication → Sign-in method**, habilitá **Correo electrónico/contraseña**.
-2. En **Authentication → Users**, creá tu usuario administrador. No hay registro público desde el sitio.
-3. Creá la base de datos de **Cloud Firestore** y habilitá **Storage**.
-4. Copiá el UID de tu usuario. En Firestore, creá el documento `admins/{UID}` (el UID como ID del documento), por ejemplo con el campo `role: "admin"`. Las reglas impiden crear o modificar administradores desde el sitio.
-5. Desde la raíz del proyecto, iniciá sesión con Firebase CLI y publicá las reglas:
+2. En **Authentication → Users**, creá la cuenta administradora. El sitio no permite registros públicos.
+3. Creá la base de datos de **Cloud Firestore**.
+4. Copiá el UID de la cuenta y, en Firestore, creá el documento `admins/{UID}` (el UID como ID del documento). Puede incluir `role: "admin"`. Las reglas impiden crear o modificar administradores desde el sitio.
+5. Publicá las reglas de Firestore:
 
    ```sh
    npx firebase-tools login
-   npx firebase-tools deploy --project ID_DEL_PROYECTO --only firestore:rules,storage
+   npx firebase-tools deploy --project ID_DEL_PROYECTO --only firestore:rules
    ```
 
-El catálogo se comparte entre todos los visitantes mediante Cloud Firestore. Las reglas permiten que cualquier visitante lea productos, pero solo el UID guardado en `admins/{UID}` puede modificarlos. Los comprobantes permanecen privados para administradores.
+Las reglas permiten leer el catálogo públicamente, pero solo el UID de `admins/{UID}` puede modificarlo. Los comprobantes permanecen privados.
 
-## 2. Publicar en GitHub Pages
+## 2. Preparar las credenciales de servidor
 
-En **Settings → Secrets and variables → Actions → Variables**, creá estas seis variables con los valores de la aplicación web de Firebase: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID` y `VITE_FIREBASE_APP_ID`.
+La API de Vercel verifica el token de Firebase y comprueba el documento `admins/{UID}` antes de firmar cargas o borrar fotos.
 
-En **Settings → Pages**, elegí **GitHub Actions** como origen. Luego de subir los cambios a `main`, el flujo de Actions compila y publica el sitio.
+1. En Google Cloud Console, creá una cuenta de servicio dedicada para la API de fotos.
+2. Asignale los roles **Cloud Datastore Viewer** y **Firebase Authentication Viewer** para que pueda comprobar el documento de administrador y validar que la sesión no fue revocada.
+3. Creá y descargá una clave JSON de esa cuenta. No la subas al repositorio ni la compartas por chat.
+4. En Vercel, agregá estas variables de entorno usando los valores del proyecto y de esa clave:
 
-Para probarlo localmente, instalá dependencias con `npm install` y ejecutá `npm run dev`. El archivo `.env` local no se publica en Git.
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_CLIENT_EMAIL`
+   - `FIREBASE_PRIVATE_KEY`
+
+`FIREBASE_PRIVATE_KEY` es la clave privada del JSON. Pegala como valor completo en Vercel; mantenela como variable de servidor y nunca le agregues el prefijo `VITE_`.
+
+## 3. Preparar Cloudinary
+
+En el panel de Cloudinary, obtené el **Cloud name**, **API Key** y **API Secret**. En Vercel, agregá:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+El API Secret debe permanecer solo en el servidor; nunca lo pongas en una variable `VITE_*` ni en el código del navegador. La app usa cargas firmadas, por lo que no hace falta habilitar un preset de carga sin firma.
+
+## 4. Configurar y publicar en Vercel
+
+En **Settings → Environment Variables**, agregá las variables anteriores y las variables públicas de Firebase:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+
+Aplicalas a los entornos que uses (**Production**, **Preview** y/o **Development**) y volvé a desplegar. Las funciones de `api/` requieren Vercel; una publicación estática en GitHub Pages no puede ejecutar estas funciones.
+
+Para desarrollo local, guardá las mismas variables en el archivo `.env` local, que está excluido de Git, y ejecutá las funciones con `npx vercel dev`. `npm run dev` solo ejecuta Vite y no inicia las funciones de Vercel.

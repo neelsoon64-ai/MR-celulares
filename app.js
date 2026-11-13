@@ -10,13 +10,7 @@ import {
   updateDoc,
   writeBatch
 } from "firebase/firestore";
-import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytes
-} from "firebase/storage";
-import { auth, db, storage } from "./src/firebase.js";
+import { auth, db } from "./src/firebase.js";
 
 const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -144,29 +138,85 @@ let isAdminView = false;
 let currentUser = null;
 let unsubscribeReceipts = null;
 
+async function callAdminApi(endpoint, body) {
+  if (!currentUser) throw new Error("La sesión de administrador venció. Iniciá sesión nuevamente.");
+
+  const token = await currentUser.getIdToken();
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "No se pudo completar la operación.");
+  return result;
+}
+
+async function uploadProductPhoto(photo, productId) {
+  const signedUpload = await callAdminApi("/api/cloudinary-sign", { productId });
+  const formData = new FormData();
+  formData.append("file", photo);
+  formData.append("api_key", signedUpload.apiKey);
+  formData.append("timestamp", String(signedUpload.timestamp));
+  formData.append("public_id", signedUpload.publicId);
+  formData.append("signature", signedUpload.signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(signedUpload.cloudName)}/image/upload`,
+    { method: "POST", body: formData }
+  );
+  const uploaded = await response.json();
+  if (!response.ok) {
+    throw new Error(uploaded.error?.message || "Cloudinary no pudo guardar la foto.");
+  }
+  if (!uploaded.secure_url || !uploaded.public_id) {
+    throw new Error("Cloudinary no devolvió los datos de la foto.");
+  }
+
+  return {
+    photoUrl: uploaded.secure_url,
+    photoPath: uploaded.public_id,
+    photoStorage: "cloudinary"
+  };
+}
+
 async function saveProduct(product, photo = null) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede editar el inventario.");
 
   const previousPhotoPath = product.photoPath || "";
+  const previousPhotoStorage = product.photoStorage || "";
   let photoUrl = product.photoUrl || "";
   let photoPath = previousPhotoPath;
+  let photoStorage = previousPhotoStorage;
   if (photo) {
     if (!ALLOWED_PHOTO_TYPES.includes(photo.type) || photo.size > MAX_PHOTO_SIZE) {
       throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 8 MB.");
     }
-    const safeName = photo.name.replace(/[^\w.-]/g, "_");
-    const path = `products/${product.id}/${crypto.randomUUID()}-${safeName}`;
-    const uploaded = await uploadBytes(ref(storage, path), photo, { contentType: photo.type });
-    photoPath = uploaded.ref.fullPath;
-    photoUrl = await getDownloadURL(uploaded.ref);
+    const uploaded = await uploadProductPhoto(photo, product.id);
+    photoPath = uploaded.photoPath;
+    photoUrl = uploaded.photoUrl;
+    photoStorage = uploaded.photoStorage;
   }
 
   const { photo: localPhoto, ...cloudProduct } = product;
-  await setDoc(doc(db, "products", product.id), { ...cloudProduct, photoPath, photoUrl });
+  await setDoc(doc(db, "products", product.id), {
+    ...cloudProduct,
+    photoPath,
+    photoUrl,
+    photoStorage
+  });
 
-  if (photo && previousPhotoPath && previousPhotoPath !== photoPath) {
+  if (
+    photo
+    && previousPhotoStorage === "cloudinary"
+    && previousPhotoPath
+    && previousPhotoPath !== photoPath
+  ) {
     try {
-      await deleteObject(ref(storage, previousPhotoPath));
+      await callAdminApi("/api/cloudinary-delete", { publicId: previousPhotoPath });
     } catch (error) {
       notify(`Producto guardado, pero no se pudo quitar la foto anterior: ${error.message}`);
     }
@@ -184,9 +234,9 @@ async function saveSale(product, receipt) {
 async function deleteProduct(product) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede quitar productos.");
   await deleteDoc(doc(db, "products", product.id));
-  if (product.photoPath) {
+  if (product.photoStorage === "cloudinary" && product.photoPath) {
     try {
-      await deleteObject(ref(storage, product.photoPath));
+      await callAdminApi("/api/cloudinary-delete", { publicId: product.photoPath });
     } catch (error) {
       notify(`Producto eliminado, pero no se pudo quitar su foto: ${error.message}`);
       return;
@@ -1039,6 +1089,7 @@ elements.productForm.addEventListener("submit", async event => {
     description: elements.productDescription.value.trim(),
     photoUrl: existing?.photoUrl || "",
     photoPath: existing?.photoPath || "",
+    photoStorage: existing?.photoStorage || "",
     status: existing?.status || "available",
     createdAt: existing?.createdAt || Date.now()
   };
