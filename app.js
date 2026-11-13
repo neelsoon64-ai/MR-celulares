@@ -23,7 +23,7 @@ const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804397759";
 const INSTAGRAM_URL = "";
-const TIKTOK_URL = "";
+const FACEBOOK_URL = "";
 const elements = {
   addButton: document.querySelector("#add-product-button"),
   emptyAddButton: document.querySelector("#empty-add-button"),
