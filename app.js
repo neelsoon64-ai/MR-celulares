@@ -296,7 +296,7 @@ function syncAdminUI() {
   elements.adminOnlyLinks.forEach(element => {
     element.hidden = !showAdminView;
   });
-  elements.adminLoginButton.textContent = isAdmin ? "Cerrar sesión" : "Acceso administrador";
+  elements.adminLoginButton.textContent = isAdmin ? "Cerrar sesión" : "Iniciar sesión";
   elements.adminLoginButton.setAttribute("aria-label", elements.adminLoginButton.textContent);
   elements.adminViewToggle.hidden = !isAdmin;
   elements.adminViewToggle.textContent = isAdminView ? "Vista cliente" : "Vista administrador";
@@ -357,9 +357,9 @@ async function handleAuthState(user) {
     if (currentUser?.uid !== user.uid) return;
     if (!adminDocument.exists()) {
       if (elements.adminDialog.open) {
-        showError(elements.adminError, "Esta cuenta no tiene permisos de administrador.");
+        showError(elements.adminError, "Esta cuenta no tiene acceso.");
       } else {
-        notify("Esta cuenta no tiene permisos de administrador.");
+        notify("Esta cuenta no tiene acceso.");
       }
       await signOut(auth);
       return;
@@ -982,14 +982,14 @@ elements.adminForm.addEventListener("submit", async event => {
     const adminDocument = await getDoc(doc(db, "admins", credential.user.uid));
     if (!adminDocument.exists()) {
       await signOut(auth);
-      showError(elements.adminError, "Esta cuenta no tiene permisos de administrador.");
+      showError(elements.adminError, "Esta cuenta no tiene acceso.");
       return;
     }
     isAdminView = true;
     syncAdminUI();
     elements.adminDialog.close();
     elements.adminForm.reset();
-    notify("Sesión de administrador iniciada.");
+    notify("Sesión iniciada.");
   } catch (error) {
     showError(elements.adminError, `No se pudo iniciar sesión: ${error.message}`);
   } finally {
