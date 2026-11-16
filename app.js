@@ -12,6 +12,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./src/firebase.js";
 
+const GOOGLE_DRIVE_FUNCTIONS_BASE_URL =
+  `https://us-central1-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+
 const MAX_PHOTO_SIZE = 4 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
@@ -158,7 +161,7 @@ async function callAdminApi(endpoint, body) {
 async function uploadProductPhoto(photo, productId) {
   const token = await currentUser.getIdToken();
   const response = await fetch(
-    `/api/google-drive-upload?productId=${encodeURIComponent(productId)}`,
+    `${GOOGLE_DRIVE_FUNCTIONS_BASE_URL}/uploadGoogleDrivePhoto?productId=${encodeURIComponent(productId)}`,
     {
       method: "POST",
       headers: {
@@ -187,7 +190,10 @@ async function deleteProductPhoto(photoStorage, photoPath, productId) {
   if (photoStorage === "cloudinary") {
     await callAdminApi("/api/cloudinary-delete", { publicId: photoPath });
   } else if (photoStorage === "google-drive") {
-    await callAdminApi("/api/google-drive-delete", { fileId: photoPath, productId });
+    await callAdminApi(`${GOOGLE_DRIVE_FUNCTIONS_BASE_URL}/deleteGoogleDrivePhoto`, {
+      fileId: photoPath,
+      productId
+    });
   }
 }
 
