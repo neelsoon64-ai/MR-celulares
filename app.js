@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./src/firebase.js";
 
-const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 4 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804397759";
@@ -156,31 +156,39 @@ async function callAdminApi(endpoint, body) {
 }
 
 async function uploadProductPhoto(photo, productId) {
-  const signedUpload = await callAdminApi("/api/cloudinary-sign", { productId });
-  const formData = new FormData();
-  formData.append("file", photo);
-  formData.append("api_key", signedUpload.apiKey);
-  formData.append("timestamp", String(signedUpload.timestamp));
-  formData.append("public_id", signedUpload.publicId);
-  formData.append("signature", signedUpload.signature);
-
+  const token = await currentUser.getIdToken();
   const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${encodeURIComponent(signedUpload.cloudName)}/image/upload`,
-    { method: "POST", body: formData }
+    `/api/google-drive-upload?productId=${encodeURIComponent(productId)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": photo.type
+      },
+      body: photo
+    }
   );
   const uploaded = await response.json();
   if (!response.ok) {
-    throw new Error(uploaded.error?.message || "Cloudinary no pudo guardar la foto.");
+    throw new Error(uploaded.error || "Google Drive no pudo guardar la foto.");
   }
-  if (!uploaded.secure_url || !uploaded.public_id) {
-    throw new Error("Cloudinary no devolvió los datos de la foto.");
+  if (!uploaded.photoUrl || !uploaded.fileId) {
+    throw new Error("Google Drive no devolvió los datos de la foto.");
   }
 
   return {
-    photoUrl: uploaded.secure_url,
-    photoPath: uploaded.public_id,
-    photoStorage: "cloudinary"
+    photoUrl: uploaded.photoUrl,
+    photoPath: uploaded.fileId,
+    photoStorage: "google-drive"
   };
+}
+
+async function deleteProductPhoto(photoStorage, photoPath, productId) {
+  if (photoStorage === "cloudinary") {
+    await callAdminApi("/api/cloudinary-delete", { publicId: photoPath });
+  } else if (photoStorage === "google-drive") {
+    await callAdminApi("/api/google-drive-delete", { fileId: photoPath, productId });
+  }
 }
 
 async function saveProduct(product, photo = null) {
@@ -191,32 +199,44 @@ async function saveProduct(product, photo = null) {
   let photoUrl = product.photoUrl || "";
   let photoPath = previousPhotoPath;
   let photoStorage = previousPhotoStorage;
+  let uploadedPhoto = null;
   if (photo) {
     if (!ALLOWED_PHOTO_TYPES.includes(photo.type) || photo.size > MAX_PHOTO_SIZE) {
-      throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 8 MB.");
+      throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 4 MB.");
     }
-    const uploaded = await uploadProductPhoto(photo, product.id);
-    photoPath = uploaded.photoPath;
-    photoUrl = uploaded.photoUrl;
-    photoStorage = uploaded.photoStorage;
+    uploadedPhoto = await uploadProductPhoto(photo, product.id);
+    photoPath = uploadedPhoto.photoPath;
+    photoUrl = uploadedPhoto.photoUrl;
+    photoStorage = uploadedPhoto.photoStorage;
   }
 
   const { photo: localPhoto, ...cloudProduct } = product;
-  await setDoc(doc(db, "products", product.id), {
-    ...cloudProduct,
-    photoPath,
-    photoUrl,
-    photoStorage
-  });
+  try {
+    await setDoc(doc(db, "products", product.id), {
+      ...cloudProduct,
+      photoPath,
+      photoUrl,
+      photoStorage
+    });
+  } catch (error) {
+    if (uploadedPhoto) {
+      try {
+        await deleteProductPhoto(uploadedPhoto.photoStorage, uploadedPhoto.photoPath, product.id);
+      } catch (cleanupError) {
+        console.error("Could not remove a Drive upload after product save failed", cleanupError);
+        notify("No se guardó el producto y no se pudo quitar la foto subida.");
+      }
+    }
+    throw error;
+  }
 
   if (
     photo
-    && previousPhotoStorage === "cloudinary"
     && previousPhotoPath
     && previousPhotoPath !== photoPath
   ) {
     try {
-      await callAdminApi("/api/cloudinary-delete", { publicId: previousPhotoPath });
+      await deleteProductPhoto(previousPhotoStorage, previousPhotoPath, product.id);
     } catch (error) {
       notify(`Producto guardado, pero no se pudo quitar la foto anterior: ${error.message}`);
     }
@@ -234,9 +254,9 @@ async function saveSale(product, receipt) {
 async function deleteProduct(product) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede quitar productos.");
   await deleteDoc(doc(db, "products", product.id));
-  if (product.photoStorage === "cloudinary" && product.photoPath) {
+  if (product.photoPath) {
     try {
-      await callAdminApi("/api/cloudinary-delete", { publicId: product.photoPath });
+      await deleteProductPhoto(product.photoStorage, product.photoPath, product.id);
     } catch (error) {
       notify(`Producto eliminado, pero no se pudo quitar su foto: ${error.message}`);
       return;
@@ -1050,7 +1070,7 @@ elements.productPhoto.addEventListener("change", () => {
   const file = elements.productPhoto.files?.[0];
   if (!file) return;
   if (!ALLOWED_PHOTO_TYPES.includes(file.type) || file.size > MAX_PHOTO_SIZE) {
-    showError(elements.productError, "Elegí una foto JPG, PNG o WebP de hasta 8 MB.");
+    showError(elements.productError, "Elegí una foto JPG, PNG o WebP de hasta 4 MB.");
     elements.productPhoto.value = "";
     return;
   }

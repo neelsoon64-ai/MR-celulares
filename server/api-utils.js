@@ -19,13 +19,13 @@ function getFirebaseAdminApp() {
     throw new Error("Firebase Admin server credentials are not configured.");
   }
 
-  const existingApp = getApps().find(app => app.name === "mr-celulares-cloudinary");
+  const existingApp = getApps().find(app => app.name === "mr-celulares-api");
   if (existingApp) return existingApp;
 
   return initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),
     projectId
-  }, "mr-celulares-cloudinary");
+  }, "mr-celulares-api");
 }
 
 export async function requireAdmin(req) {
