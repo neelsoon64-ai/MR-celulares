@@ -18,7 +18,7 @@ const GOOGLE_DRIVE_FUNCTIONS_BASE_URL =
 const MAX_PHOTO_SIZE = 4 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
-const WHATSAPP_PHONE = "5492804397759";
+const WHATSAPP_PHONE = "5492804033635";
 const FACEBOOK_URL = "";
 const elements = {
   addButton: document.querySelector("#add-product-button"),
