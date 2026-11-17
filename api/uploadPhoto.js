@@ -1,6 +1,5 @@
 import {
   ApiError,
-  requireAdmin,
   requirePost,
   sendApiError
 } from "../server/api-utils.js";
@@ -39,8 +38,6 @@ export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
 
   try {
-    await requireAdmin(req);
-
     const productId = req.query?.productId;
     if (typeof productId !== "string" || !PRODUCT_ID_PATTERN.test(productId)) {
       throw new ApiError(400, "El identificador del producto no es válido.");
