@@ -281,6 +281,9 @@ main { padding-top: 26px; }
 .spark-one { top: 47px; right: 55px; font-size: 20px; }
 .spark-two { bottom: 46px; left: 60px; font-size: 13px; }
 .payment-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,9 +292,31 @@ main { padding-top: 26px; }
   margin: 15px 0 20px;
   border: 1px solid rgba(96,165,250,.38);
   border-radius: 14px;
-  background: linear-gradient(115deg, #17243a, #1d3a64);
+  background: linear-gradient(115deg, #17243a, #1d3a64, #17243a);
+  background-size: 180% 100%;
   color: #fff;
   text-align: left;
+  box-shadow: 0 14px 38px rgba(30,64,175,.14);
+  animation: payment-banner-enter .7s cubic-bezier(.2,.8,.2,1) both,
+    payment-banner-glow 6s ease-in-out 1s infinite;
+  transition: transform .28s ease, border-color .28s ease, box-shadow .28s ease;
+}
+.payment-banner::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -80%;
+  left: -35%;
+  width: 22%;
+  height: 260%;
+  background: linear-gradient(90deg, transparent, rgba(191,219,254,.22), transparent);
+  transform: rotate(20deg);
+  animation: payment-banner-shine 5.5s ease-in-out 1.2s infinite;
+}
+.payment-banner:hover {
+  transform: translateY(-3px);
+  border-color: rgba(147,197,253,.72);
+  box-shadow: 0 18px 44px rgba(30,64,175,.24);
 }
 .payment-banner-icon {
   width: 52px;
@@ -304,6 +329,8 @@ main { padding-top: 26px; }
   background: rgba(59,130,246,.18);
   color: #93c5fd;
   font-size: 25px;
+  box-shadow: 0 0 24px rgba(96,165,250,.12);
+  animation: payment-card-pulse 3.2s ease-in-out infinite;
 }
 .payment-banner strong,
 .payment-banner span {
@@ -313,12 +340,14 @@ main { padding-top: 26px; }
   font-size: clamp(20px, 3vw, 34px);
   line-height: 1.1;
   letter-spacing: -.8px;
+  animation: payment-text-in .65s .18s cubic-bezier(.2,.8,.2,1) both;
 }
 .payment-banner div > span {
   margin-top: 7px;
   color: #bfdbfe;
   font-size: clamp(13px, 1.8vw, 18px);
   font-weight: 700;
+  animation: payment-text-in .65s .32s cubic-bezier(.2,.8,.2,1) both;
 }
 .benefit-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 21px 24px; margin: 15px 0 39px; border: 1px solid #e6e9e1; border-radius: 13px; background: #fff; }
 .benefit-strip > div { display: flex; align-items: center; gap: 11px; }
@@ -981,6 +1010,27 @@ main { padding: 28px 0 32px; }
   from { opacity: .32; }
   to { opacity: .85; }
 }
+@keyframes payment-banner-enter {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes payment-banner-glow {
+  0%, 100% { background-position: 0 50%; box-shadow: 0 14px 38px rgba(30,64,175,.14); }
+  50% { background-position: 100% 50%; box-shadow: 0 16px 42px rgba(59,130,246,.24); }
+}
+@keyframes payment-banner-shine {
+  0%, 62% { left: -35%; opacity: 0; }
+  68% { opacity: 1; }
+  82%, 100% { left: 125%; opacity: 0; }
+}
+@keyframes payment-card-pulse {
+  0%, 100% { transform: translateY(0); box-shadow: 0 0 18px rgba(96,165,250,.12); }
+  50% { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(96,165,250,.28); }
+}
+@keyframes payment-text-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 @keyframes spark-pulse {
   0%, 100% { opacity: .5; filter: drop-shadow(0 0 2px rgba(96,165,250,.3)); }
   50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(96,165,250,.85)); }
@@ -1009,6 +1059,10 @@ main { padding: 28px 0 32px; }
   .phone-back { --phone-depth: -24px; }
   .phone-wallpaper::after { filter: blur(8px); }
   .hero-art::after { inset: 4% 12%; opacity: .5; }
+  .payment-banner { gap: 10px; min-height: 82px; padding: 12px; }
+  .payment-banner-icon { width: 44px; height: 44px; border-radius: 12px; font-size: 21px; }
+  .payment-banner strong { font-size: 17px; }
+  .payment-banner div > span { margin-top: 5px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-art::after,
@@ -1017,7 +1071,12 @@ main { padding: 28px 0 32px; }
   .hero-phone,
   .phone-wallpaper::before,
   .phone-wallpaper::after,
-  .hero-spark {
+  .hero-spark,
+  .payment-banner,
+  .payment-banner::before,
+  .payment-banner-icon,
+  .payment-banner strong,
+  .payment-banner div > span {
     animation: none !important;
     transition: none !important;
   }
