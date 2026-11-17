@@ -58,6 +58,10 @@ const elements = {
   receiptDialog: document.querySelector("#receipt-dialog"),
   printReceipt: document.querySelector("#print-receipt"),
   printButton: document.querySelector("#print-button"),
+  photoZoomDialog: document.querySelector("#photo-zoom-dialog"),
+  photoZoomImage: document.querySelector("#photo-zoom-image"),
+  photoZoomPrev: document.querySelector("#photo-zoom-prev"),
+  photoZoomNext: document.querySelector("#photo-zoom-next"),
   productGrid: document.querySelector("#product-grid"),
   inventoryEmpty: document.querySelector("#inventory-empty"),
   inventoryEmptyTitle: document.querySelector("#inventory-empty-title"),
@@ -141,6 +145,8 @@ let isAdmin = false;
 let isAdminView = false;
 let currentUser = null;
 let unsubscribeReceipts = null;
+let zoomPhotoUrls = [];
+let zoomPhotoIndex = 0;
 
 async function callAdminApi(endpoint, body) {
   if (!currentUser) throw new Error("La sesión de administrador venció. Iniciá sesión nuevamente.");
@@ -553,6 +559,22 @@ function detectBrand(product) {
   return "other";
 }
 
+function openPhotoZoom(photoUrls, photoIndex = 0) {
+  if (!photoUrls.length) return;
+  zoomPhotoUrls = photoUrls;
+  zoomPhotoIndex = Math.max(0, Math.min(photoIndex, photoUrls.length - 1));
+  renderZoomPhoto();
+  elements.photoZoomDialog.showModal();
+}
+
+function renderZoomPhoto() {
+  elements.photoZoomImage.src = zoomPhotoUrls[zoomPhotoIndex];
+  elements.photoZoomImage.alt = `Foto ${zoomPhotoIndex + 1} de ${zoomPhotoUrls.length}`;
+  const hasMultiplePhotos = zoomPhotoUrls.length > 1;
+  elements.photoZoomPrev.hidden = !hasMultiplePhotos;
+  elements.photoZoomNext.hidden = !hasMultiplePhotos;
+}
+
 function createProductCard(product) {
   const card = document.createElement("article");
   card.className = "product-card";
@@ -565,7 +587,7 @@ function createProductCard(product) {
     ? product.photoUrls.filter(Boolean)
     : (product.photoUrl ? [product.photoUrl] : []);
   const photo = photoUrls.length
-    ? `<img src="${escapeHtml(photoUrls[0])}" alt="${escapeHtml(product.name)}">${photoUrls.length > 1 ? `<span class="photo-count-badge">${photoUrls.length} fotos</span>` : ""}`
+    ? `<button class="product-photo-button" type="button" data-photo-index="0" aria-label="Ampliar fotos de ${escapeHtml(product.name)}"><img src="${escapeHtml(photoUrls[0])}" alt="${escapeHtml(product.name)}"></button>${photoUrls.length > 1 ? `<span class="photo-count-badge">${photoUrls.length} fotos</span>` : ""}`
     : isAccessory
       ? `<div class="product-placeholder accessory" aria-hidden="true"><span class="placeholder-glow"></span><svg viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8m-9 5v8"/></svg><span class="placeholder-brand">ACCESORIOS</span></div>`
       : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
@@ -609,6 +631,7 @@ function createProductCard(product) {
     });
   });
   card.querySelectorAll(".whatsapp-link").forEach(link => attachWhatsApp(link));
+  card.querySelector(".product-photo-button")?.addEventListener("click", () => openPhotoZoom(photoUrls, 0));
   return card;
 }
 
@@ -1407,6 +1430,24 @@ document.querySelectorAll(".dialog").forEach(dialog => {
   dialog.addEventListener("click", event => {
     if (event.target === dialog) dialog.close();
   });
+});
+
+elements.photoZoomPrev.addEventListener("click", () => {
+  if (!zoomPhotoUrls.length) return;
+  zoomPhotoIndex = (zoomPhotoIndex - 1 + zoomPhotoUrls.length) % zoomPhotoUrls.length;
+  renderZoomPhoto();
+});
+elements.photoZoomNext.addEventListener("click", () => {
+  if (!zoomPhotoUrls.length) return;
+  zoomPhotoIndex = (zoomPhotoIndex + 1) % zoomPhotoUrls.length;
+  renderZoomPhoto();
+});
+elements.photoZoomDialog.addEventListener("click", event => {
+  if (event.target === elements.photoZoomDialog) elements.photoZoomDialog.close();
+});
+elements.photoZoomDialog.addEventListener("keydown", event => {
+  if (event.key === "ArrowLeft") elements.photoZoomPrev.click();
+  if (event.key === "ArrowRight") elements.photoZoomNext.click();
 });
 
 listenForProducts();

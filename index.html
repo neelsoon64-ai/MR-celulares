@@ -438,6 +438,13 @@
     </div>
   </dialog>
 
+  <dialog class="photo-zoom-dialog" id="photo-zoom-dialog" aria-label="Vista ampliada de fotos">
+    <button class="photo-zoom-close" type="button" data-close="photo-zoom-dialog" aria-label="Cerrar">×</button>
+    <button class="photo-zoom-nav photo-zoom-prev" id="photo-zoom-prev" type="button" aria-label="Foto anterior">‹</button>
+    <img id="photo-zoom-image" alt="Foto ampliada del producto">
+    <button class="photo-zoom-nav photo-zoom-next" id="photo-zoom-next" type="button" aria-label="Foto siguiente">›</button>
+  </dialog>
+
   <a class="floating-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar por un celular." aria-label="Consultar por WhatsApp"><span aria-hidden="true">◉</span></a>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
