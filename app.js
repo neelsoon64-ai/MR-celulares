@@ -5,7 +5,9 @@ import {
   deleteField,
   doc,
   getDoc,
+  increment,
   onSnapshot,
+  serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch
@@ -71,6 +73,8 @@ const elements = {
   stockCount: document.querySelector("#stock-count"),
   soldCount: document.querySelector("#sold-count"),
   receiptCount: document.querySelector("#receipt-count"),
+  todayVisitCount: document.querySelector("#today-visit-count"),
+  totalVisitCount: document.querySelector("#total-visit-count"),
   tabReceiptCount: document.querySelector("#tab-receipt-count"),
   search: document.querySelector("#search-input"),
   catalogCount: document.querySelector("#catalog-count"),
@@ -147,6 +151,9 @@ let currentUser = null;
 let unsubscribeReceipts = null;
 let zoomPhotoUrls = [];
 let zoomPhotoIndex = 0;
+let unsubscribeVisits = null;
+let todayVisitCount = 0;
+let totalVisitCount = 0;
 
 async function callAdminApi(endpoint, body) {
   if (!currentUser) throw new Error("La sesión de administrador venció. Iniciá sesión nuevamente.");
@@ -403,6 +410,8 @@ function render() {
   elements.stockCount.textContent = availableCount;
   elements.soldCount.textContent = products.length - availableCount;
   elements.receiptCount.textContent = receipts.length;
+  elements.todayVisitCount.textContent = todayVisitCount;
+  elements.totalVisitCount.textContent = totalVisitCount;
   elements.tabReceiptCount.textContent = receipts.length;
   renderProducts();
   renderReceipts();
@@ -420,10 +429,15 @@ function syncAdminUI() {
   elements.adminViewToggle.setAttribute("aria-pressed", String(isAdminView));
   if (showAdminView) {
     if (!unsubscribeReceipts) listenForReceipts();
+    if (!unsubscribeVisits) listenForVisits();
   } else {
     if (unsubscribeReceipts) {
       unsubscribeReceipts();
       unsubscribeReceipts = null;
+    }
+    if (unsubscribeVisits) {
+      unsubscribeVisits();
+      unsubscribeVisits = null;
     }
     receipts = [];
     elements.managementPanel.open = false;
@@ -455,6 +469,58 @@ function listenForReceipts() {
   }, error => {
     showError(elements.receiptError, `No se pudieron cargar los comprobantes: ${error.message}`);
   });
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+async function registerWebsiteVisit() {
+  const dateKey = getLocalDateKey();
+  const sessionKey = `mr-celulares-visit-${dateKey}`;
+
+  try {
+    if (sessionStorage.getItem(sessionKey)) return;
+
+    await Promise.all([
+      setDoc(doc(db, "metadata", "visits"), {
+        total: increment(1),
+        lastVisit: serverTimestamp()
+      }, { merge: true }),
+      setDoc(doc(db, "metadata", "daily", dateKey), {
+        date: dateKey,
+        count: increment(1),
+        lastVisit: serverTimestamp()
+      }, { merge: true })
+    ]);
+    sessionStorage.setItem(sessionKey, "1");
+  } catch (error) {
+    console.error("No se pudo registrar la visita:", error);
+  }
+}
+
+function listenForVisits() {
+  const dateKey = getLocalDateKey();
+  const unsubscribers = [];
+
+  unsubscribers.push(onSnapshot(doc(db, "metadata", "visits"), snapshot => {
+    totalVisitCount = snapshot.exists() ? Number(snapshot.data().total || 0) : 0;
+    render();
+  }, error => {
+    console.error("No se pudo cargar el total de visitas:", error);
+  }));
+
+  unsubscribers.push(onSnapshot(doc(db, "metadata", "daily", dateKey), snapshot => {
+    todayVisitCount = snapshot.exists() ? Number(snapshot.data().count || 0) : 0;
+    render();
+  }, error => {
+    console.error("No se pudo cargar las visitas de hoy:", error);
+  }));
+
+  unsubscribeVisits = () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
 async function handleAuthState(user) {
@@ -1451,6 +1517,7 @@ elements.photoZoomDialog.addEventListener("keydown", event => {
 });
 
 listenForProducts();
+void registerWebsiteVisit();
 onAuthStateChanged(auth, user => {
   void handleAuthState(user);
 });
