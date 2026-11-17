@@ -5,7 +5,8 @@ const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbxH-vRU-YkQXVZy6olkVzyhWXndNbiZTyk0pUeg8oeGtijOLUyaJaWPu-fAo5Jx7SPg/exec";
 
 async function callGoogleDrive(payload) {
-  const secret = process.env.GOOGLE_DRIVE_APPS_SCRIPT_SECRET?.trim();
+  const secret = process.env.API_SECRET?.trim()
+    || process.env.GOOGLE_DRIVE_APPS_SCRIPT_SECRET?.trim();
 
   if (!secret) {
     throw new Error("Google Drive Apps Script secret is not configured.");
