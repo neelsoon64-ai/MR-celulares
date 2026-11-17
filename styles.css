@@ -280,6 +280,46 @@ main { padding-top: 26px; }
 .hero-spark { position: absolute; color: #c5e86c; }
 .spark-one { top: 47px; right: 55px; font-size: 20px; }
 .spark-two { bottom: 46px; left: 60px; font-size: 13px; }
+.payment-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 96px;
+  margin: 15px 0 20px;
+  border: 1px solid rgba(96,165,250,.38);
+  border-radius: 14px;
+  background: linear-gradient(115deg, #17243a, #1d3a64);
+  color: #fff;
+  text-align: left;
+}
+.payment-banner-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  background: rgba(59,130,246,.18);
+  color: #93c5fd;
+  font-size: 25px;
+}
+.payment-banner strong,
+.payment-banner span {
+  display: block;
+}
+.payment-banner strong {
+  font-size: clamp(20px, 3vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -.8px;
+}
+.payment-banner div > span {
+  margin-top: 7px;
+  color: #bfdbfe;
+  font-size: clamp(13px, 1.8vw, 18px);
+  font-weight: 700;
+}
 .benefit-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 21px 24px; margin: 15px 0 39px; border: 1px solid #e6e9e1; border-radius: 13px; background: #fff; }
 .benefit-strip > div { display: flex; align-items: center; gap: 11px; }
 .benefit-icon { width: 32px; height: 32px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; background: #f0f5e8; color: #5e7d48; font-size: 15px; }
