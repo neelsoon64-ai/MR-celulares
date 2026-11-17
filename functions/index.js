@@ -65,6 +65,15 @@ const functionOptions = {
 };
 
 exports.uploadGoogleDrivePhoto = onRequest(functionOptions, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "https://mrcelulares.vercel.app");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
   res.set("Cache-Control", "no-store");
   if (!requirePost(req, res)) return;
 

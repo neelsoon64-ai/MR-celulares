@@ -1,223 +1,95 @@
-import { randomUUID } from "node:crypto";
+
 import { ApiError } from "./api-utils.js";
 
-export class GoogleDriveApiError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbxH-vRU-YkQXVZy6olkVzyhWXndNbiZTyk0pUeg8oeGtijOLUyaJaWPu-fAo5Jx7SPg/exec";
 
-function getOAuthCredentials() {
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim();
+async function callGoogleDrive(payload) {
+  const secret = process.env.GOOGLE_DRIVE_APPS_SCRIPT_SECRET?.trim();
 
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error("Google Drive OAuth server credentials are not configured.");
+  if (!secret) {
+    throw new Error("Google Drive Apps Script secret is not configured.");
   }
 
-  return { clientId, clientSecret, refreshToken };
-}
+  let response;
 
-async function getAccessToken() {
-  const credentials = getOAuthCredentials();
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: credentials.clientId,
-      client_secret: credentials.clientSecret,
-      refresh_token: credentials.refreshToken,
-      grant_type: "refresh_token"
-    })
-  });
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new GoogleDriveApiError(
-      response.status,
-      `Google OAuth token request failed: ${result.error_description || result.error || response.statusText}`
-    );
-  }
-  if (typeof result.access_token !== "string" || !result.access_token) {
-    throw new Error("Google OAuth did not return an access token.");
-  }
-
-  return result.access_token;
-}
-
-async function driveRequest(accessToken, url, options = {}) {
-  const { headers = {}, ...requestOptions } = options;
-  const response = await fetch(url, {
-    ...requestOptions,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...headers
-    }
-  });
-
-  if (!response.ok) {
-    const details = await response.text();
-    throw new GoogleDriveApiError(
-      response.status,
-      `Google Drive API request failed (${response.status}): ${details}`
-    );
-  }
-  if (response.status === 204) return null;
-
-  return response.json();
-}
-
-async function findDriveFolder(accessToken, query) {
-  const params = new URLSearchParams({
-    q: `${query} and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: "files(id,name)",
-    pageSize: "1",
-    spaces: "drive"
-  });
-  const result = await driveRequest(
-    accessToken,
-    `https://www.googleapis.com/drive/v3/files?${params}`
-  );
-  return result.files?.[0] || null;
-}
-
-async function createDriveFolder(accessToken, name, appProperties, parents = []) {
-  const folder = await driveRequest(
-    accessToken,
-    "https://www.googleapis.com/drive/v3/files?fields=id",
-    {
+  try {
+    response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        name,
-        mimeType: "application/vnd.google-apps.folder",
-        appProperties,
-        ...(parents.length ? { parents } : {})
-      })
-    }
-  );
-  if (typeof folder?.id !== "string" || !folder.id) {
-    throw new Error("Google Drive did not return the created folder ID.");
+        ...payload,
+        secret
+      }),
+      redirect: "follow"
+    });
+  } catch (error) {
+    console.error("Google Apps Script connection failed:", error);
+    throw new ApiError(502, "No se pudo conectar con Google Drive.");
   }
-  return folder.id;
-}
 
-async function getProductFolderId(accessToken, productId) {
-  const appPropertyQuery =
-    "appProperties has { key='application' and value='mr-celulares' }";
-  const rootFolder = await findDriveFolder(
-    accessToken,
-    `${appPropertyQuery} and appProperties has { key='folderType' and value='root' }`
-  );
-  const rootFolderId = rootFolder?.id || await createDriveFolder(
-    accessToken,
-    "MR_Celulares",
-    { application: "mr-celulares", folderType: "root" }
-  );
-  const productFolder = await findDriveFolder(
-    accessToken,
-    `${appPropertyQuery} and appProperties has { key='folderType' and value='product' }`
-      + ` and appProperties has { key='productId' and value='${productId}' }`
-      + ` and '${rootFolderId}' in parents`
-  );
-  return productFolder?.id || createDriveFolder(
-    accessToken,
-    productId,
-    { application: "mr-celulares", folderType: "product", productId },
-    [rootFolderId]
-  );
+  const responseText = await response.text();
+
+  let result;
+
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    console.error(
+      "Invalid Google Apps Script response:",
+      responseText.slice(0, 500)
+    );
+    throw new ApiError(502, "Google Drive devolvió una respuesta no válida.");
+  }
+
+  if (!response.ok || result.status !== "success") {
+    console.error("Google Apps Script operation failed:", result.message);
+    throw new ApiError(
+      502,
+      result.message || "No se pudo completar la operación en Google Drive."
+    );
+  }
+
+  return result;
 }
 
 export async function uploadGoogleDriveImage(file, productId, contentType) {
-  const accessToken = await getAccessToken();
-  const productFolderId = await getProductFolderId(accessToken, productId);
-  const extension = contentType.split("/")[1];
-  const boundary = `mr-celulares-${randomUUID()}`;
-  const metadata = {
-    name: `${productId}-${randomUUID()}.${extension}`,
-    mimeType: contentType,
-    appProperties: {
-      application: "mr-celulares",
-      productId
-    },
-    parents: [productFolderId]
-  };
-  const body = Buffer.concat([
-    Buffer.from(
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`
-    ),
-    file,
-    Buffer.from(`\r\n--${boundary}--`)
-  ]);
-  const uploaded = await driveRequest(
-    accessToken,
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
-    {
-      method: "POST",
-      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
-      body
-    }
-  );
-
-  if (typeof uploaded?.id !== "string" || !uploaded.id) {
-    throw new Error("Google Drive did not return the uploaded file ID.");
+  if (!Buffer.isBuffer(file) || file.length === 0) {
+    throw new ApiError(400, "No se recibió ninguna foto.");
   }
 
-  try {
-    await driveRequest(
-      accessToken,
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(uploaded.id)}/permissions`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "anyone", role: "reader" })
-      }
-    );
-  } catch (error) {
-    try {
-      await driveRequest(
-        accessToken,
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(uploaded.id)}`,
-        { method: "DELETE" }
-      );
-    } catch (cleanupError) {
-      console.error("Could not remove a Drive upload after sharing failed", cleanupError);
-    }
-    throw error;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    throw new ApiError(400, "Formato de imagen no permitido.");
+  }
+
+  const result = await callGoogleDrive({
+    action: "upload",
+    productId,
+    mimeType: contentType,
+    base64: file.toString("base64")
+  });
+
+  if (
+    typeof result.fileId !== "string" ||
+    typeof result.photoUrl !== "string"
+  ) {
+    throw new Error("Google Drive did not return valid photo information.");
   }
 
   return {
-    fileId: uploaded.id,
-    photoUrl: `https://drive.google.com/uc?export=view&id=${encodeURIComponent(uploaded.id)}`
+    fileId: result.fileId,
+    photoUrl: result.photoUrl
   };
 }
 
 export async function deleteGoogleDriveImage(fileId, productId) {
-  const accessToken = await getAccessToken();
-  const encodedId = encodeURIComponent(fileId);
-  let file;
-
-  try {
-    file = await driveRequest(
-      accessToken,
-      `https://www.googleapis.com/drive/v3/files/${encodedId}?fields=id%2CappProperties`
-    );
-  } catch (error) {
-    if (error instanceof GoogleDriveApiError && error.status === 404) return false;
-    throw error;
-  }
-
-  if (
-    file.appProperties?.application !== "mr-celulares"
-    || file.appProperties?.productId !== productId
-  ) {
-    throw new ApiError(404, "La foto no existe en la cuenta de Google Drive.");
-  }
-
-  await driveRequest(accessToken, `https://www.googleapis.com/drive/v3/files/${encodedId}`, {
-    method: "DELETE"
+  const result = await callGoogleDrive({
+    action: "delete",
+    fileId,
+    productId
   });
-  return true;
+
+  return result.deleted === true;
 }
