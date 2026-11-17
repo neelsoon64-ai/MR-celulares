@@ -161,7 +161,7 @@ async function callAdminApi(endpoint, body) {
 async function uploadProductPhoto(photo, productId) {
   const token = await currentUser.getIdToken();
   const response = await fetch(
-    `${GOOGLE_DRIVE_FUNCTIONS_BASE_URL}/uploadGoogleDrivePhoto?productId=${encodeURIComponent(productId)}`,
+    `/api/uploadPhoto?productId=${encodeURIComponent(productId)}`,
     {
       method: "POST",
       headers: {

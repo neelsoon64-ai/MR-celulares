@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/uploadPhoto/:match*",
+      "destination": "https://us-central1-mr-celulares.cloudfunctions.net/uploadGoogleDrivePhoto/:match*"
+    }
+  ]
+}
