@@ -47,6 +47,7 @@ const elements = {
   productPhoto: document.querySelector("#product-photo"),
   photoFileName: document.querySelector("#photo-file-name"),
   photoPreview: document.querySelector("#photo-preview"),
+  photoPreviews: document.querySelector("#photo-previews"),
   productError: document.querySelector("#product-error"),
   saleDialog: document.querySelector("#sale-dialog"),
   saleForm: document.querySelector("#sale-form"),
@@ -133,7 +134,7 @@ const elements = {
 
 let products = [];
 let receipts = [];
-let pendingPhoto = null;
+let pendingPhotos = [];
 let toastTimer;
 let catalogFilter = "all";
 let isAdmin = false;
@@ -204,54 +205,77 @@ async function deleteProductPhoto(photoStorage, photoPath, productId) {
   }
 }
 
-async function saveProduct(product, photo = null) {
+async function saveProduct(product, photos = []) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede editar el inventario.");
 
-  const previousPhotoPath = product.photoPath || "";
-  const previousPhotoStorage = product.photoStorage || "";
-  let photoUrl = product.photoUrl || "";
-  let photoPath = previousPhotoPath;
-  let photoStorage = previousPhotoStorage;
-  let uploadedPhoto = null;
-  if (photo) {
-    if (!ALLOWED_PHOTO_TYPES.includes(photo.type) || photo.size > MAX_PHOTO_SIZE) {
-      throw new Error("La foto debe ser JPG, PNG o WebP y pesar hasta 4 MB.");
+  const existingUrls = Array.isArray(product.photoUrls)
+    ? product.photoUrls.filter(Boolean)
+    : (product.photoUrl ? [product.photoUrl] : []);
+  const existingPaths = Array.isArray(product.photoPaths)
+    ? product.photoPaths.filter(Boolean)
+    : (product.photoPath ? [product.photoPath] : []);
+  const existingStorages = Array.isArray(product.photoStorages)
+    ? product.photoStorages
+    : existingPaths.map(() => product.photoStorage || "google-drive");
+  const uploadedPhotos = [];
+  let photoUrls = [...existingUrls];
+  let photoPaths = [...existingPaths];
+  let photoStorages = [...existingStorages];
+
+  try {
+    for (const photo of photos) {
+      if (!ALLOWED_PHOTO_TYPES.includes(photo.type) || photo.size > MAX_PHOTO_SIZE) {
+        throw new Error("Cada foto debe ser JPG, PNG o WebP y pesar hasta 4 MB.");
+      }
+      const uploadedPhoto = await uploadProductPhoto(photo, product.id);
+      uploadedPhotos.push(uploadedPhoto);
+      photoUrls.push(uploadedPhoto.photoUrl);
+      photoPaths.push(uploadedPhoto.photoPath);
+      photoStorages.push(uploadedPhoto.photoStorage);
     }
-    uploadedPhoto = await uploadProductPhoto(photo, product.id);
-    photoPath = uploadedPhoto.photoPath;
-    photoUrl = uploadedPhoto.photoUrl;
-    photoStorage = uploadedPhoto.photoStorage;
+  } catch (error) {
+    for (const uploadedPhoto of uploadedPhotos) {
+      try {
+        await deleteProductPhoto(uploadedPhoto.photoStorage, uploadedPhoto.photoPath, product.id);
+      } catch (cleanupError) {
+        console.error("Could not clean up a photo upload", cleanupError);
+      }
+    }
+    throw error;
   }
 
   const { photo: localPhoto, ...cloudProduct } = product;
   try {
     await setDoc(doc(db, "products", product.id), {
       ...cloudProduct,
-      photoPath,
-      photoUrl,
-      photoStorage
+      photoUrl: photoUrls[0] || "",
+      photoPath: photoPaths[0] || "",
+      photoStorage: photoStorages[0] || "",
+      photoUrls,
+      photoPaths,
+      photoStorages
     });
   } catch (error) {
-    if (uploadedPhoto) {
+    for (const uploadedPhoto of uploadedPhotos) {
       try {
         await deleteProductPhoto(uploadedPhoto.photoStorage, uploadedPhoto.photoPath, product.id);
       } catch (cleanupError) {
         console.error("Could not remove a Drive upload after product save failed", cleanupError);
-        notify("No se guardó el producto y no se pudo quitar la foto subida.");
+        notify("No se guardó el producto y no se pudo quitar una foto subida.");
       }
     }
     throw error;
   }
 
-  if (
-    photo
-    && previousPhotoPath
-    && previousPhotoPath !== photoPath
-  ) {
-    try {
-      await deleteProductPhoto(previousPhotoStorage, previousPhotoPath, product.id);
-    } catch (error) {
-      notify(`Producto guardado, pero no se pudo quitar la foto anterior: ${error.message}`);
+  const retainedPaths = new Set(photoPaths);
+  for (let index = 0; index < existingPaths.length; index += 1) {
+    const previousPath = existingPaths[index];
+    if (previousPath && !retainedPaths.has(previousPath)) {
+      try {
+        await deleteProductPhoto(existingStorages[index] || "google-drive", previousPath, product.id);
+      } catch (error) {
+        notify(`Producto guardado, pero no se pudo quitar una foto anterior: ${error.message}`);
+      }
     }
   }
 }
@@ -267,12 +291,17 @@ async function saveSale(product, receipt) {
 async function deleteProduct(product) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede quitar productos.");
   await deleteDoc(doc(db, "products", product.id));
-  if (product.photoPath) {
+  const paths = Array.isArray(product.photoPaths)
+    ? product.photoPaths.filter(Boolean)
+    : (product.photoPath ? [product.photoPath] : []);
+  const storages = Array.isArray(product.photoStorages)
+    ? product.photoStorages
+    : paths.map(() => product.photoStorage || "google-drive");
+  for (let index = 0; index < paths.length; index += 1) {
     try {
-      await deleteProductPhoto(product.photoStorage, product.photoPath, product.id);
+      await deleteProductPhoto(storages[index] || "google-drive", paths[index], product.id);
     } catch (error) {
-      notify(`Producto eliminado, pero no se pudo quitar su foto: ${error.message}`);
-      return;
+      notify(`Producto eliminado, pero no se pudo quitar una foto: ${error.message}`);
     }
   }
   notify("Producto eliminado del catálogo.");
@@ -532,9 +561,11 @@ function createProductCard(product) {
   const isSealed = !isAccessory && product.condition === "sealed";
   const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO SELLADO" : "USADO SELECCIONADO";
   const conditionClass = isAccessory ? "accessory" : isSealed ? "sealed" : "used";
-  const photoUrl = product.photoUrl || "";
-  const photo = photoUrl
-    ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(product.name)}">`
+  const photoUrls = Array.isArray(product.photoUrls) && product.photoUrls.length
+    ? product.photoUrls.filter(Boolean)
+    : (product.photoUrl ? [product.photoUrl] : []);
+  const photo = photoUrls.length
+    ? `<img src="${escapeHtml(photoUrls[0])}" alt="${escapeHtml(product.name)}">${photoUrls.length > 1 ? `<span class="photo-count-badge">${photoUrls.length} fotos</span>` : ""}`
     : isAccessory
       ? `<div class="product-placeholder accessory" aria-hidden="true"><span class="placeholder-glow"></span><svg viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8m-9 5v8"/></svg><span class="placeholder-brand">ACCESORIOS</span></div>`
       : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
@@ -634,7 +665,11 @@ function updateProductCategoryFields() {
 function openProductDialog(product = null, category = "phone") {
   elements.productForm.reset();
   hideError(elements.productError);
-  pendingPhoto = null;
+  pendingPhotos = [];
+  elements.photoPreviews.replaceChildren();
+  elements.photoPreviews.hidden = true;
+  elements.photoPreview.hidden = true;
+  elements.photoPreview.removeAttribute("src");
   elements.productId.value = product?.id || "";
   elements.productCategory.value = product?.category || category;
   const isAccessory = elements.productCategory.value === "accessory";
@@ -648,16 +683,22 @@ function openProductDialog(product = null, category = "phone") {
   elements.productBattery.value = product?.battery || "";
   elements.productGrade.value = product?.grade || "";
   updateProductCategoryFields();
-  const existingPhotoUrl = product?.photoUrl
-    || (product?.photo instanceof Blob ? URL.createObjectURL(product.photo) : "");
-  elements.photoFileName.textContent = existingPhotoUrl
-    ? "Foto guardada · elegir otra para reemplazarla"
+  const existingPhotoUrls = product
+    ? (Array.isArray(product.photoUrls) && product.photoUrls.length
+      ? product.photoUrls.filter(Boolean)
+      : (product.photoUrl ? [product.photoUrl] : []))
+    : [];
+  elements.photoFileName.textContent = existingPhotoUrls.length
+    ? `${existingPhotoUrls.length} foto${existingPhotoUrls.length === 1 ? "" : "s"} guardada${existingPhotoUrls.length === 1 ? "" : "s"} · elegir más`
     : `Elegir una foto ${isAccessory ? "del accesorio" : "del celular"}`;
-  elements.photoPreview.hidden = !existingPhotoUrl;
-  if (elements.photoPreview.src.startsWith("blob:")) URL.revokeObjectURL(elements.photoPreview.src);
-  elements.photoPreview.src = existingPhotoUrl;
-  if (existingPhotoUrl.startsWith("blob:")) {
-    elements.photoPreview.onload = () => URL.revokeObjectURL(elements.photoPreview.src);
+  if (existingPhotoUrls.length) {
+    existingPhotoUrls.forEach(url => {
+      const preview = document.createElement("img");
+      preview.src = url;
+      preview.alt = "Foto guardada del producto";
+      elements.photoPreviews.appendChild(preview);
+    });
+    elements.photoPreviews.hidden = false;
   }
   elements.productDialog.showModal();
   elements.productName.focus();
@@ -1080,19 +1121,29 @@ elements.adminForm.addEventListener("submit", async event => {
 });
 elements.productCategory.addEventListener("change", updateProductCategoryFields);
 elements.productPhoto.addEventListener("change", () => {
-  const file = elements.productPhoto.files?.[0];
-  if (!file) return;
-  if (!ALLOWED_PHOTO_TYPES.includes(file.type) || file.size > MAX_PHOTO_SIZE) {
-    showError(elements.productError, "Elegí una foto JPG, PNG o WebP de hasta 4 MB.");
+  const files = Array.from(elements.productPhoto.files || []);
+  if (!files.length) return;
+  const invalidFile = files.find(file => !ALLOWED_PHOTO_TYPES.includes(file.type) || file.size > MAX_PHOTO_SIZE);
+  if (invalidFile) {
+    pendingPhotos = [];
+    elements.photoPreviews.replaceChildren();
+    elements.photoPreviews.hidden = true;
+    showError(elements.productError, "Cada foto debe ser JPG, PNG o WebP y pesar hasta 4 MB.");
     elements.productPhoto.value = "";
     return;
   }
-  pendingPhoto = file;
-  elements.photoFileName.textContent = file.name;
-  if (elements.photoPreview.src.startsWith("blob:")) URL.revokeObjectURL(elements.photoPreview.src);
-  elements.photoPreview.src = URL.createObjectURL(file);
-  elements.photoPreview.onload = () => URL.revokeObjectURL(elements.photoPreview.src);
-  elements.photoPreview.hidden = false;
+  pendingPhotos = files;
+  elements.photoFileName.textContent = `${files.length} foto${files.length === 1 ? " seleccionada" : "s seleccionadas"}`;
+  elements.photoPreviews.replaceChildren();
+  files.forEach(file => {
+    const preview = document.createElement("img");
+    preview.src = URL.createObjectURL(file);
+    preview.alt = "Vista previa";
+    preview.onload = () => URL.revokeObjectURL(preview.src);
+    elements.photoPreviews.appendChild(preview);
+  });
+  elements.photoPreview.hidden = true;
+  elements.photoPreviews.hidden = false;
   hideError(elements.productError);
 });
 
@@ -1123,12 +1174,21 @@ elements.productForm.addEventListener("submit", async event => {
     photoUrl: existing?.photoUrl || "",
     photoPath: existing?.photoPath || "",
     photoStorage: existing?.photoStorage || "",
+    photoUrls: Array.isArray(existing?.photoUrls)
+      ? existing.photoUrls
+      : (existing?.photoUrl ? [existing.photoUrl] : []),
+    photoPaths: Array.isArray(existing?.photoPaths)
+      ? existing.photoPaths
+      : (existing?.photoPath ? [existing.photoPath] : []),
+    photoStorages: Array.isArray(existing?.photoStorages)
+      ? existing.photoStorages
+      : (existing?.photoPath ? [existing.photoStorage || "google-drive"] : []),
     status: existing?.status || "available",
     createdAt: existing?.createdAt || Date.now()
   };
   try {
-    await saveProduct(product, pendingPhoto);
-    pendingPhoto = null;
+    await saveProduct(product, pendingPhotos);
+    pendingPhotos = [];
     elements.productDialog.close();
     notify(existing
       ? `${isAccessory ? "Accesorio" : "Celular"} actualizado.`

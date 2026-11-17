@@ -105,6 +105,9 @@ footer { padding: 16px 0 25px; border-top: 1px solid var(--line); color: #969ba5
 .photo-picker { min-height: 54px; position: relative; display: flex; align-items: center; padding: 10px; border: 1px dashed #d9dbe3; border-radius: 8px; color: #7a7f89; font-size: 11px; }
 .photo-picker input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 .photo-picker img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; margin-right: 10px; }
+.photo-previews { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 10px; }
+.photo-previews[hidden] { display: none; }
+.photo-count-badge { position: absolute; right: 10px; bottom: 10px; padding: 5px 8px; border-radius: 20px; background: rgba(10,14,22,.78); color: #fff; font-size: 9px; font-weight: 700; }
 .form-error { margin: 12px 0 0; color: var(--red); font-size: 11px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
 .dialog-actions .button-primary { max-width: 100%; }

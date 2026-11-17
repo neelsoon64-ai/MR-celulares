@@ -109,6 +109,7 @@
                     <option value="4">4 cuotas</option>
                     <option value="6">6 cuotas</option>
                     <option value="12">12 cuotas</option>
+                    <option value="24">24 cuotas</option>
                     <option value="custom">Personalizado</option>
                   </select>
                 </label>
@@ -257,7 +258,7 @@
         <div class="faq-list">
           <details class="faq-item"><summary>¿Qué garantía tienen los usados seleccionados?<span></span></summary><p>Todos los equipos usados se revisan y se entregan con garantía escrita. Consultanos el plazo y las condiciones específicas del modelo que te interesa.</p></details>
           <details class="faq-item"><summary>¿Cómo funciona el Plan Canje?<span></span></summary><p>Nos contás la marca, el modelo y el estado de tu celular. Lo evaluamos y te pasamos una cotización para usarlo como parte de pago.</p></details>
-          <details class="faq-item"><summary>¿Qué medios de pago aceptan?<span></span></summary><p>Podés consultar por efectivo, transferencia, tarjetas y otras alternativas disponibles al momento de la compra.</p></details>
+          <details class="faq-item"><summary>¿Qué medios de pago aceptan?<span></span></summary><p>Podés pagar en efectivo, transferencia, tarjetas de crédito en 12 y 24 cuotas, y otras alternativas disponibles al momento de la compra.</p></details>
           <details class="faq-item"><summary>¿Hacen envíos o entregas?<span></span></summary><p>Coordinamos la entrega y el envío seguro directamente con vos. Escribinos para consultar opciones y disponibilidad en tu zona.</p></details>
         </div>
       </section>
@@ -344,9 +345,10 @@
       <input class="text-input" id="product-description" name="description" placeholder="Color, capacidad, accesorios..." maxlength="160">
       <label class="field-label" id="product-photo-label" for="product-photo">Foto (opcional)</label>
       <div class="photo-picker">
-        <input id="product-photo" name="photo" type="file" accept="image/*">
+        <input id="product-photo" name="photo" type="file" accept="image/*" multiple>
         <span id="photo-file-name">Elegir una foto del producto</span>
         <img id="photo-preview" alt="Vista previa de la foto" hidden>
+        <div id="photo-previews" class="photo-previews" hidden></div>
       </div>
       <p class="form-error" id="product-error" role="alert" hidden></p>
       <div class="dialog-actions">
@@ -399,6 +401,8 @@
             <option value="Efectivo">Efectivo</option>
             <option value="Transferencia">Transferencia</option>
             <option value="Tarjeta">Tarjeta</option>
+            <option value="Tarjeta de crédito 12 cuotas">Tarjeta de crédito 12 cuotas</option>
+            <option value="Tarjeta de crédito 24 cuotas">Tarjeta de crédito 24 cuotas</option>
             <option value="USDT / Cripto">USDT / Cripto</option>
             <option value="Otro">Otro</option>
           </select>
