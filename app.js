@@ -171,6 +171,13 @@ async function uploadProductPhoto(photo, productId) {
       body: photo
     }
   );
+  const contentType = response.headers.get("content-type");
+  if (!contentType || !contentType.includes("application/json")) {
+    const textResponse = await response.text();
+    console.error("El servidor devolvió HTML en lugar de JSON:", textResponse);
+    throw new Error("El servidor respondió con un error HTML (posible 404 o fallo de función).");
+  }
+
   const uploaded = await response.json();
   if (!response.ok) {
     throw new Error(uploaded.error || "Google Drive no pudo guardar la foto.");
