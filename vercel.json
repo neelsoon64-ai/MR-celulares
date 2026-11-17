@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/uploadPhoto/:match*",
-      "destination": "https://us-central1-mr-celulares.cloudfunctions.net/uploadGoogleDrivePhoto/:match*"
+      "source": "/api/uploadPhoto",
+      "destination": "https://script.google.com/macros/s/AKfycbxH-vRU-YkQXVZy6olkVzyhWXndNbiZTyk0pUeg8oeGtijOLUyaJaWPu-fAo5Jx7SPg/exec"
     }
   ]
 }
