@@ -490,7 +490,7 @@ async function registerWebsiteVisit() {
         total: increment(1),
         lastVisit: serverTimestamp()
       }, { merge: true }),
-      setDoc(doc(db, "metadata", "daily", dateKey), {
+      setDoc(doc(db, "dailyVisits", dateKey), {
         date: dateKey,
         count: increment(1),
         lastVisit: serverTimestamp()
@@ -513,7 +513,7 @@ function listenForVisits() {
     console.error("No se pudo cargar el total de visitas:", error);
   }));
 
-  unsubscribers.push(onSnapshot(doc(db, "metadata", "daily", dateKey), snapshot => {
+  unsubscribers.push(onSnapshot(doc(db, "dailyVisits", dateKey), snapshot => {
     todayVisitCount = snapshot.exists() ? Number(snapshot.data().count || 0) : 0;
     render();
   }, error => {
