@@ -21,6 +21,7 @@ const MAX_PHOTO_SIZE = 4 * 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804033635";
+const SELECTION_STORAGE_KEY = "mrcelulares-selection";
 const FACEBOOK_URL = "";
 const elements = {
   addButton: document.querySelector("#add-product-button"),
@@ -81,7 +82,17 @@ const elements = {
   catalogEyebrow: document.querySelector("#catalog-eyebrow"),
   catalogTitle: document.querySelector("#catalog-title"),
   catalogSubtitle: document.querySelector("#catalog-subtitle"),
+  catalogLoading: document.querySelector("#catalog-loading"),
   statusFilter: document.querySelector("#status-filter"),
+  conditionFilter: document.querySelector("#condition-filter"),
+  selectionDialog: document.querySelector("#selection-dialog"),
+  selectionOpen: document.querySelector("#selection-open"),
+  selectionClose: document.querySelector("#selection-close"),
+  selectionCount: document.querySelector("#selection-count"),
+  selectionItems: document.querySelector("#selection-items"),
+  selectionEmpty: document.querySelector("#selection-empty"),
+  selectionTotal: document.querySelector("#selection-total"),
+  selectionWhatsapp: document.querySelector("#selection-whatsapp"),
   inventoryTab: document.querySelector("#inventory-tab"),
   receiptsTab: document.querySelector("#receipts-tab"),
   inventoryView: document.querySelector("#inventory-view"),
@@ -154,6 +165,8 @@ let zoomPhotoIndex = 0;
 let unsubscribeVisits = null;
 let todayVisitCount = 0;
 let totalVisitCount = 0;
+let selection = {};
+let catalogLoadingTimer;
 
 async function callAdminApi(endpoint, body) {
   if (!currentUser) throw new Error("La sesión de administrador venció. Iniciá sesión nuevamente.");
@@ -415,6 +428,7 @@ function render() {
   elements.tabReceiptCount.textContent = receipts.length;
   renderProducts();
   renderReceipts();
+  renderSelection();
 }
 
 function syncAdminUI() {
@@ -446,7 +460,14 @@ function syncAdminUI() {
 }
 
 function listenForProducts() {
+  elements.catalogLoading.hidden = false;
+  elements.catalogLoading.textContent = "Consultando disponibilidad…";
+  catalogLoadingTimer = window.setTimeout(() => {
+    elements.catalogLoading.textContent = "Cargando productos…";
+  }, 450);
   onSnapshot(collection(db, "products"), snapshot => {
+    window.clearTimeout(catalogLoadingTimer);
+    elements.catalogLoading.hidden = true;
     products = snapshot.docs.map(productDocument => ({
       ...productDocument.data(),
       id: productDocument.id
@@ -454,6 +475,8 @@ function listenForProducts() {
     hideError(elements.catalogError);
     render();
   }, error => {
+    window.clearTimeout(catalogLoadingTimer);
+    elements.catalogLoading.hidden = true;
     showError(elements.catalogError, `No se pudo cargar el catálogo: ${error.message}`);
   });
 }
@@ -566,12 +589,13 @@ async function handleAuthState(user) {
 function renderProducts() {
   const query = elements.search.value.trim().toLocaleLowerCase("es");
   const status = elements.statusFilter.value;
+  const conditionFilter = elements.conditionFilter.value;
   const accessoriesFilter = catalogFilter === "accessories";
-  elements.catalogEyebrow.textContent = accessoriesFilter ? "ACCESORIOS PARA TU EQUIPO" : "ELEGÍ TU PRÓXIMO EQUIPO";
-  elements.catalogTitle.textContent = accessoriesFilter ? "Accesorios para todos los días." : "Encontrá el indicado.";
+  elements.catalogEyebrow.textContent = "MRcelulares";
+  elements.catalogTitle.textContent = "Explorá el catálogo";
   elements.catalogSubtitle.textContent = accessoriesFilter
-    ? "Fundas, auriculares, cargadores y más."
-    : "Originales, revisados y listos para acompañarte.";
+    ? "Encontrá accesorios para acompañar tu equipo."
+    : "Elegí tus equipos y accesorios. Consultá disponibilidad por WhatsApp.";
   elements.search.placeholder = accessoriesFilter ? "Buscar accesorios..." : "Buscar por modelo...";
   elements.search.setAttribute("aria-label", accessoriesFilter ? "Buscar accesorios" : "Buscar por modelo");
   const visibleProducts = products.filter(product => {
@@ -579,35 +603,37 @@ function renderProducts() {
     const matchesText = searchable.includes(query);
     const isAvailable = product.status !== "sold";
     const matchesStatus = status === "all" || (status === "available" ? isAvailable : product.status === status);
-    const brand = detectBrand(product);
     const matchesCategory = catalogFilter === "all"
+      || (catalogFilter === "phones" && product.category !== "accessory")
       || (catalogFilter === "accessories" && product.category === "accessory")
-      || (catalogFilter === "sealed" && product.category !== "accessory" && product.condition === "sealed")
-      || (catalogFilter === "used" && product.category !== "accessory" && product.condition !== "sealed")
-      || (catalogFilter === "apple" && brand === "apple")
-      || (catalogFilter === "samsung" && brand === "samsung")
-      || (catalogFilter === "xiaomi-motorola" && ["xiaomi", "motorola"].includes(brand));
-    return matchesText && matchesStatus && matchesCategory;
+    const matchesCondition = product.category === "accessory"
+      || conditionFilter === "all"
+      || (conditionFilter === "sealed" && product.condition === "sealed")
+      || (conditionFilter === "used" && product.condition !== "sealed");
+    return matchesText && matchesStatus && matchesCategory && matchesCondition;
   });
 
   elements.productGrid.replaceChildren();
   visibleProducts.forEach(product => elements.productGrid.append(createProductCard(product)));
-  elements.catalogCount.textContent = accessoriesFilter
+  elements.catalogCount.textContent = catalogFilter === "accessories"
     ? `${visibleProducts.length} ${visibleProducts.length === 1 ? "accesorio disponible" : "accesorios disponibles"}`
-    : `${visibleProducts.length} ${visibleProducts.length === 1 ? "equipo disponible" : "equipos disponibles"}`;
+    : `${visibleProducts.length} ${visibleProducts.length === 1 ? "producto disponible" : "productos disponibles"}`;
   const noProductsExist = products.filter(product => product.status !== "sold").length === 0;
   const noAccessoriesExist = !products.some(product => product.category === "accessory");
+  const noPhonesExist = !products.some(product => product.category !== "accessory" && product.status !== "sold");
   elements.inventoryEmpty.hidden = visibleProducts.length > 0;
   elements.inventoryEmptyTitle.textContent = accessoriesFilter
     ? noAccessoriesExist ? "Próximamente, accesorios." : "No encontramos accesorios con ese filtro."
-    : noProductsExist ? "Próximamente, nuevos equipos." : "No encontramos equipos con ese filtro.";
+    : catalogFilter === "phones" && noPhonesExist
+      ? "Próximamente, nuevos equipos."
+      : noProductsExist ? "Próximamente, nuevos equipos." : "No encontramos productos con ese filtro.";
   elements.inventoryEmptyCopy.textContent = accessoriesFilter
     ? noAccessoriesExist
-      ? "Estamos preparando fundas, auriculares, cargadores y más. Escribinos para consultar."
+      ? "Estamos preparando nuevos accesorios. Escribinos para consultar."
       : "Probá con otra búsqueda o consultanos por accesorios disponibles."
     : noProductsExist
-      ? "Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar el tuyo."
-      : "Probá con otra búsqueda o consultanos por WhatsApp para encontrar tu próximo celular.";
+      ? "Estamos preparando el catálogo. Escribinos y te ayudamos a encontrar lo que buscás."
+      : "Probá con otra búsqueda o consultanos por WhatsApp para encontrar tu próximo producto.";
   const emptyContact = elements.inventoryEmpty.querySelector(".whatsapp-link");
   emptyContact.dataset.message = accessoriesFilter
     ? "Hola, quiero consultar por accesorios disponibles."
@@ -647,8 +673,11 @@ function createProductCard(product) {
   const isSold = product.status === "sold";
   const isAccessory = product.category === "accessory";
   const isSealed = !isAccessory && product.condition === "sealed";
-  const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO SELLADO" : "USADO SELECCIONADO";
+  const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO" : "SEMINUEVO";
   const conditionClass = isAccessory ? "accessory" : isSealed ? "sealed" : "used";
+  const specs = productSpecs(product);
+  const battery = getBatteryStatus(product);
+  const selectedQuantity = selection[product.id] || 0;
   const photoUrls = Array.isArray(product.photoUrls) && product.photoUrls.length
     ? product.photoUrls.filter(Boolean)
     : (product.photoUrl ? [product.photoUrl] : []);
@@ -657,11 +686,15 @@ function createProductCard(product) {
     : isAccessory
       ? `<div class="product-placeholder accessory" aria-hidden="true"><span class="placeholder-glow"></span><svg viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8m-9 5v8"/></svg><span class="placeholder-brand">ACCESORIOS</span></div>`
       : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
-  const usedDetails = !isAccessory && !isSealed && (product.battery || product.grade)
-    ? `<div class="product-condition-details">${product.battery ? `<span class="battery-tag">⌁ Batería ${escapeHtml(product.battery)}%</span>` : ""}${product.grade ? `<span class="grade-tag">${escapeHtml(product.grade)}</span>` : ""}</div>`
+  const usedDetails = !isAccessory && !isSealed
+    ? `<div class="product-condition-details"><span class="battery-tag">⌁ Batería ${escapeHtml(battery || "no informada")}</span>${product.grade ? `<span class="grade-tag">${escapeHtml(product.grade)}</span>` : ""}</div>`
     : "";
   const productDescription = product.description
-    || (isSold ? `Vendido ${formatDate(product.soldAt)}` : isAccessory ? "Accesorios para celulares" : brandLabel(detectBrand(product)));
+    || (isAccessory ? "Accesorios para celulares" : brandLabel(detectBrand(product)));
+  const productDetails = isAccessory
+    ? `<div class="product-specs"><span>Color: ${escapeHtml(specs.color || "consultar")}</span></div>`
+    : `<div class="product-specs"><span>Color: ${escapeHtml(specs.color || "consultar")}</span><span>Capacidad: ${escapeHtml(specs.storage || "consultar")}</span></div>`;
+  const installmentPrice = Number(product.price) / 3;
   card.innerHTML = `
     <div class="product-image">
       ${photo}
@@ -671,10 +704,13 @@ function createProductCard(product) {
     <div class="product-content">
       <h3>${escapeHtml(product.name)}</h3>
       <p class="product-description">${escapeHtml(productDescription)}</p>
+      ${productDetails}
       ${usedDetails}
       <p class="product-price">${formatPrice(product.price, product.currency)}<span>${product.currency === "USD" ? "USD" : "ARS"}</span></p>
-      <p class="product-price-note">${product.priceNote ? escapeHtml(product.priceNote) : "Precio contado · Consultá financiación"}</p>
-      <a class="button button-whatsapp product-contact whatsapp-link ${isSold ? "is-sold" : ""}" href="#" data-message="Hola, quiero consultar por el ${isAccessory ? "accesorio" : "celular"} ${escapeHtml(product.name)}. ¿Sigue disponible?">Consultar este ${isAccessory ? "accesorio" : "equipo"} <span aria-hidden="true">↗</span></a>
+      <p class="product-price-note">Efectivo o transferencia · Simulación: 3 cuotas de ${formatPrice(installmentPrice, product.currency)}</p>
+      <button class="button button-primary add-selection-button" type="button" ${isSold ? "disabled" : ""} aria-label="Agregar ${escapeHtml(product.name)} a mi selección">
+        ${selectedQuantity ? `Agregar a mi selección · ${selectedQuantity}` : "Agregar a mi selección"}
+      </button>
       ${isAdmin && isAdminView ? `<div class="product-owner-actions">
         ${isSold
           ? '<button class="small-button restore-button" data-action="restore">Volver a stock</button>'
@@ -696,9 +732,153 @@ function createProductCard(product) {
       if (action === "sell") document.querySelector("#management-panel").open = true;
     });
   });
-  card.querySelectorAll(".whatsapp-link").forEach(link => attachWhatsApp(link));
+  card.querySelector(".add-selection-button").addEventListener("click", () => changeSelection(product.id, 1));
   card.querySelector(".product-photo-button")?.addEventListener("click", () => openPhotoZoom(photoUrls, 0));
   return card;
+}
+
+function productSpecs(product) {
+  const description = String(product.description || "");
+  const details = `${description} ${product.name || ""}`;
+  const extract = (property, labelPattern) => {
+    const value = product[property];
+    if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+    if (typeof value === "string" && value.trim()) return value.trim();
+    const match = description.match(new RegExp(`(?:${labelPattern})\\s*:\\s*([^|;\\n]+)`, "i"));
+    if (match?.[1]?.trim()) return match[1].trim();
+    if (property === "storage") return details.match(/\b\d+(?:[.,]\d+)?\s?(?:GB|TB)\b/i)?.[0] || "";
+    return description.match(/\b(azul oscuro|azul claro|azul|negro|black|blanco|white|rojo|red|verde|green|rosa|pink|natural|glaciar|titanio|titanium|plata|plateado|silver|dorado|gold|gris|gray|grey|morado|purple|violeta|grafito|graphite|medianoche|midnight|lavanda|lila|celeste|beige|marrón|naranja)\b/i)?.[0] || "";
+  };
+  return {
+    color: extract("colors", "colores?|color"),
+    storage: extract("storage", "capacidad(?:es)?|almacenamiento|storage")
+  };
+}
+
+function getBatteryStatus(product) {
+  const battery = String(product.battery || "").trim();
+  if (battery) return /^\d{1,3}$/.test(battery) ? `${battery}%` : battery;
+  return String(product.description || "").match(/\b(?:100|[1-9]?\d)\s?%/)?.[0]?.trim() || "";
+}
+
+function changeSelection(productId, amount) {
+  const product = products.find(item => item.id === productId);
+  if (amount > 0 && (!product || product.status === "sold")) {
+    notify("Este producto ya no está disponible en el catálogo.");
+    return;
+  }
+
+  const nextQuantity = (selection[productId] || 0) + amount;
+  if (nextQuantity > 0) selection[productId] = nextQuantity;
+  else delete selection[productId];
+  saveSelection();
+  render();
+}
+
+function saveSelection() {
+  try {
+    localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(selection));
+  } catch (error) {
+    console.error("No se pudo guardar la selección en este dispositivo:", error);
+    notify("No se pudo guardar la selección en este dispositivo.");
+  }
+}
+
+function readSelection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SELECTION_STORAGE_KEY) || "{}");
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
+      throw new Error("El formato guardado no es válido.");
+    }
+    return Object.fromEntries(Object.entries(saved)
+      .filter(([id, quantity]) => id && Number.isSafeInteger(quantity) && quantity > 0));
+  } catch (error) {
+    console.error("No se pudo recuperar la selección guardada:", error);
+    notify("No se pudo recuperar la selección guardada en este dispositivo.");
+    return {};
+  }
+}
+
+function buildSelectionMessage(selectedProducts) {
+  const lines = ["Hola, quiero consultar por esta selección de MRcelulares:"];
+  selectedProducts.forEach(({ product, quantity }) => {
+    const isAccessory = product.category === "accessory";
+    const isSealed = product.condition === "sealed";
+    const specs = productSpecs(product);
+    const condition = isAccessory ? "Accesorio" : isSealed ? "Nuevo" : "Seminuevo";
+    const battery = !isAccessory && !isSealed
+      ? ` · Batería: ${getBatteryStatus(product) || "no informada"}`
+      : "";
+    lines.push(
+      "",
+      `• ${product.name} × ${quantity}`,
+      `  Capacidad: ${specs.storage || "consultar"} · Color: ${specs.color || "consultar"}`,
+      `  Condición: ${condition}${battery}`,
+      `  Precio por unidad: ${formatPrice(product.price, product.currency)} (${product.currency || "ARS"})`
+    );
+  });
+  lines.push("", "¿Me confirman disponibilidad y precio?");
+  return lines.join("\n");
+}
+
+function renderSelection() {
+  const selectedProducts = Object.entries(selection).map(([id, quantity]) => ({
+    product: products.find(item => item.id === id),
+    id,
+    quantity
+  }));
+  const count = selectedProducts.reduce((total, item) => total + item.quantity, 0);
+  elements.selectionCount.textContent = count;
+  elements.selectionItems.replaceChildren();
+  elements.selectionEmpty.hidden = selectedProducts.length > 0;
+  elements.selectionTotal.textContent = "";
+
+  const totals = new Map();
+  selectedProducts.forEach(({ product, id, quantity }) => {
+    const row = document.createElement("article");
+    row.className = "selection-item";
+    if (!product) {
+      row.innerHTML = `<div class="selection-item-info"><strong>Producto no disponible en el catálogo</strong><small>Quitalo de tu selección para continuar.</small></div><button class="small-button delete-button" type="button" data-selection-action="remove" data-product-id="${escapeHtml(id)}" aria-label="Quitar producto no disponible">Quitar</button>`;
+      elements.selectionItems.append(row);
+      return;
+    }
+
+    const specs = productSpecs(product);
+    const isAccessory = product.category === "accessory";
+    const isSealed = product.condition === "sealed";
+    const condition = isAccessory ? "Accesorio" : isSealed ? "Nuevo" : "Seminuevo";
+    const battery = !isAccessory && !isSealed
+      ? ` · Batería ${escapeHtml(getBatteryStatus(product) || "no informada")}`
+      : "";
+    row.innerHTML = `
+      <div class="selection-item-info">
+        <strong>${escapeHtml(product.name)}</strong>
+        <small>${escapeHtml(specs.storage || "Capacidad a consultar")} · ${escapeHtml(specs.color || "Color a consultar")}</small>
+        <small>${condition}${battery} · ${formatPrice(product.price, product.currency)}</small>
+        ${product.status === "sold" ? '<small class="selection-unavailable">Disponibilidad a confirmar</small>' : ""}
+      </div>
+      <div class="selection-controls" aria-label="Cantidad de ${escapeHtml(product.name)}">
+        <button class="small-button" type="button" data-selection-action="decrease" data-product-id="${escapeHtml(id)}" aria-label="Restar una unidad de ${escapeHtml(product.name)}">−</button>
+        <span>${quantity}</span>
+        <button class="small-button" type="button" data-selection-action="increase" data-product-id="${escapeHtml(id)}" aria-label="Sumar una unidad de ${escapeHtml(product.name)}">+</button>
+        <button class="small-button delete-button" type="button" data-selection-action="remove" data-product-id="${escapeHtml(id)}" aria-label="Quitar ${escapeHtml(product.name)} de mi selección">Quitar</button>
+      </div>`;
+    elements.selectionItems.append(row);
+    const currency = product.currency || "ARS";
+    totals.set(currency, (totals.get(currency) || 0) + Number(product.price || 0) * quantity);
+  });
+
+  if (totals.size) {
+    const formattedTotals = Array.from(totals, ([currency, total]) => formatPrice(total, currency)).join(" · ");
+    elements.selectionTotal.textContent = `Total referencial: ${formattedTotals}`;
+  }
+  const availableSelection = selectedProducts.filter(item => item.product);
+  const disabled = availableSelection.length === 0;
+  elements.selectionWhatsapp.setAttribute("aria-disabled", String(disabled));
+  elements.selectionWhatsapp.classList.toggle("is-disabled", disabled);
+  elements.selectionWhatsapp.href = disabled
+    ? "#"
+    : whatsappUrl(buildSelectionMessage(availableSelection));
 }
 
 function brandLabel(brand) {
@@ -743,10 +923,12 @@ function updateProductCategoryFields() {
   elements.productBatteryField.hidden = isAccessory;
   elements.productGradeLabel.hidden = isAccessory;
   elements.productGrade.hidden = isAccessory;
-  elements.productDescriptionLabel.textContent = isAccessory ? "Descripción (opcional)" : "Detalle (opcional)";
+  elements.productDescriptionLabel.textContent = isAccessory
+    ? "Color y detalles (opcional)"
+    : "Colores, capacidad y detalles (opcional)";
   elements.productDescription.placeholder = isAccessory
-    ? "Ej. Compatible con iPhone 15 · color negro"
-    : "Color, capacidad, accesorios...";
+    ? "Color: Negro | Compatible con distintos modelos"
+    : "Colores: Negro, Plata | Capacidad: 128 GB";
   elements.productPhotoLabel.textContent = isAccessory ? "Foto del accesorio (opcional)" : "Foto (opcional)";
   elements.productSubmitButton.textContent = `Guardar ${isAccessory ? "accesorio" : "celular"}`;
 }
@@ -833,7 +1015,7 @@ function receiptLine(label, value) {
 function openReceipt(receipt) {
   const isAccessory = receipt.category === "accessory";
   elements.printReceipt.innerHTML = `
-    <div class="receipt-brand"><strong>MR celulares</strong><p>Comprobante de venta</p></div>
+    <div class="receipt-brand"><strong>MRcelulares</strong><p>Comprobante de venta</p></div>
     <div class="receipt-number"><span>N.º <strong>${escapeHtml(receipt.number)}</strong></span><span>${formatDate(receipt.soldAt)}</span></div>
     <p class="eyebrow">DATOS DEL COMPRADOR</p>
     ${receiptLine("Nombre y apellido", receipt.buyer.name)}
@@ -1065,7 +1247,7 @@ function createPaymentMessage(details) {
     ? pendingBalance < 0.005 && installments.length ? "Cuenta saldada" : paidCount || downpayment > 0 ? "En curso" : "Pendiente"
     : "Pagada";
   const lines = [
-    "*Comprobante de pago · MR Celulares*",
+    "*Comprobante de pago · MRcelulares*",
     `*Fecha:* ${formatPaymentDate(new Date(), { day: "2-digit", month: "long", year: "numeric" })}`,
     `*Titular:* ${name}`,
     `*DNI:* ${documentNumber}`,
@@ -1095,7 +1277,7 @@ function createPaymentMessage(details) {
     lines.push("*Estado:* Total abonado. Operación cancelada.");
   }
 
-  lines.push("", "Gracias por elegir MR Celulares.");
+  lines.push("", "Gracias por elegir MRcelulares.");
   return lines.join("\n");
 }
 
@@ -1334,6 +1516,7 @@ elements.saleForm.addEventListener("submit", async event => {
 elements.printButton.addEventListener("click", () => window.print());
 elements.search.addEventListener("input", renderProducts);
 elements.statusFilter.addEventListener("change", renderProducts);
+elements.conditionFilter.addEventListener("change", renderProducts);
 document.querySelectorAll("[data-catalog-filter]").forEach(button => {
   button.addEventListener("click", () => {
     catalogFilter = button.dataset.catalogFilter;
@@ -1360,6 +1543,31 @@ document.querySelector("#management-panel").addEventListener("toggle", event => 
   document.body.classList.toggle("management-open", event.currentTarget.open);
   renderProducts();
 });
+elements.selectionOpen.addEventListener("click", () => elements.selectionDialog.showModal());
+elements.selectionClose.addEventListener("click", () => elements.selectionDialog.close());
+elements.selectionItems.addEventListener("click", event => {
+  const button = event.target.closest("[data-selection-action]");
+  if (!button) return;
+  const { selectionAction, productId } = button.dataset;
+  if (selectionAction === "increase") changeSelection(productId, 1);
+  if (selectionAction === "decrease") changeSelection(productId, -1);
+  if (selectionAction === "remove") {
+    delete selection[productId];
+    saveSelection();
+    render();
+  }
+});
+elements.selectionWhatsapp.addEventListener("click", event => {
+  if (elements.selectionWhatsapp.getAttribute("aria-disabled") === "true") {
+    event.preventDefault();
+    notify("Agregá al menos un producto disponible a tu selección.");
+    return;
+  }
+  if (!WHATSAPP_PHONE) {
+    event.preventDefault();
+    notify("Configurá el número de WhatsApp de la tienda en la constante WHATSAPP_PHONE de app.js.");
+  }
+});
 
 function whatsappUrl(message) {
   const encodedMessage = encodeURIComponent(message);
@@ -1368,7 +1576,7 @@ function whatsappUrl(message) {
 }
 
 function attachWhatsApp(link) {
-  link.href = whatsappUrl(link.dataset.message || "Hola, quiero consultar por MR Celulares.");
+  link.href = whatsappUrl(link.dataset.message || "Hola, quiero consultar por MRcelulares.");
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.addEventListener("click", event => {
@@ -1380,31 +1588,6 @@ function attachWhatsApp(link) {
 }
 
 document.querySelectorAll(".whatsapp-link").forEach(attachWhatsApp);
-document.querySelector("#trade-form").addEventListener("submit", event => {
-  event.preventDefault();
-  const brand = document.querySelector("#trade-brand").value;
-  const model = document.querySelector("#trade-model").value.trim();
-  if (!brand || !model) {
-    event.currentTarget.reportValidity();
-    return;
-  }
-  const battery = document.querySelector("#trade-battery").value;
-  const condition = document.querySelector("#trade-condition").value;
-  const message = `Hola, quiero cotizar mi celular para Plan Canje.
-Marca: ${brand}
-Modelo y capacidad: ${model}
-Batería: ${battery}
-Estado estético: ${condition}`;
-  const link = document.createElement("a");
-  link.href = whatsappUrl(message);
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  if (!WHATSAPP_PHONE) {
-    notify("Configurá el número de WhatsApp de la tienda en app.js para recibir cotizaciones.");
-    return;
-  }
-  link.click();
-});
 document.querySelector("#current-year").textContent = new Date().getFullYear();
 document.querySelector("#menu-toggle").addEventListener("click", event => {
   const isOpen = document.querySelector(".site-nav").classList.toggle("is-open");
@@ -1516,6 +1699,8 @@ elements.photoZoomDialog.addEventListener("keydown", event => {
   if (event.key === "ArrowRight") elements.photoZoomNext.click();
 });
 
+selection = readSelection();
+renderSelection();
 listenForProducts();
 void registerWebsiteVisit();
 onAuthStateChanged(auth, user => {

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#09090b">
-  <meta name="description" content="MR Celulares: comprobantes de pago y catálogo de celulares y accesorios.">
-  <title>MR Celulares | Celulares y accesorios</title>
+  <meta name="description" content="Explorá celulares y accesorios de MRcelulares. Armá tu selección y consultá disponibilidad por WhatsApp.">
+  <title>MRcelulares | Celulares y accesorios</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
@@ -13,23 +13,19 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#" aria-label="Inicio">
-        <img class="brand-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares">
+      <a class="brand" href="#" aria-label="MRcelulares, inicio">
+        <img class="brand-logo" src="assets/mr-celulares-logo.jpeg" alt="">
+        <span class="brand-copy"><strong>MRcelulares</strong><small>Tecnología que va con vos</small></span>
       </a>
       <nav class="site-nav" aria-label="Navegación principal">
-        <a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a>
-        <a href="#inventory-view" data-filter-link="used">Usados seleccionados</a>
+        <a href="#inventory-view" data-filter-link="all">Catálogo</a>
         <a href="#inventory-view" data-filter-link="accessories">Accesorios</a>
+        <a href="#how-it-works">Cómo funciona</a>
         <a href="#payment-receipts" data-admin-only hidden>Boletas</a>
         <button class="admin-view-toggle" id="admin-view-toggle" type="button" aria-pressed="false" hidden>Vista administrador</button>
-        <a href="#plan-canje">Plan Canje</a>
-        <a href="#garantia">Garantía</a>
-        <a href="#ubicacion">Ubicación</a>
+        <button class="admin-access-button" id="admin-login-button" type="button">Iniciar sesión</button>
       </nav>
-      <a class="button button-whatsapp nav-cta whatsapp-link" href="#" data-message="Hola, quiero consultar por los celulares disponibles.">
-        <span class="whatsapp-icon" aria-hidden="true">◉</span><span>Consultar por WhatsApp</span>
-      </a>
-      <button class="button admin-access-button" id="admin-login-button" type="button">Iniciar sesión</button>
+      <button class="button button-outline selection-open-button" id="selection-open" type="button" aria-haspopup="dialog" aria-controls="selection-dialog">Mi selección <span id="selection-count" aria-live="polite">0</span></button>
       <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">☰</button>
     </header>
 
@@ -137,7 +133,7 @@
               <span class="preview-receipt-number" id="receipt-number"></span>
             </div>
             <article class="receipt-paper" id="receipt-paper" aria-live="polite">
-              <div class="paper-topline"><img src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><span id="receipt-issued-date"></span></div>
+              <div class="paper-topline"><img src="assets/mr-celulares-logo.jpeg" alt="MRcelulares"><span id="receipt-issued-date"></span></div>
               <div class="paper-title"><div><span class="paper-eyebrow">COMPROBANTE DE PAGO</span><h2 id="receipt-mode-title">Boleta de contado</h2></div><span class="paper-status" id="receipt-status">Pendiente</span></div>
               <div class="paper-customer">
                 <div><span>TITULAR</span><strong id="receipt-preview-name">Nombre y apellido</strong></div>
@@ -154,7 +150,7 @@
                 <div class="paper-installments" id="receipt-installments"></div>
               </div>
               <div class="paper-next-payment" id="receipt-next-payment" hidden><span>↗ <span id="receipt-next-label">PRÓXIMO VENCIMIENTO</span></span><strong id="receipt-next-detail"></strong></div>
-              <div class="paper-footer"><span id="receipt-warranty">Conserve este comprobante como constancia de pago.</span><div><span>MR CELULARES</span><small>Gracias por confiar en nosotros</small></div></div>
+              <div class="paper-footer"><span id="receipt-warranty">Conserve este comprobante como constancia de pago.</span><div><span>MRcelulares</span><small>Gracias por elegir MRcelulares</small></div></div>
             </article>
             <div class="preview-actions">
               <button class="generator-print-button" id="print-generator-receipt" type="button">
@@ -171,54 +167,35 @@
 
       <section class="hero">
         <div class="hero-copy">
-          <span class="hero-kicker"><span class="hero-kicker-dot"></span> MR CELULARES · TECNOLOGÍA CON RESPALDO</span>
-          <h1>Tecnología de punta,<br>nueva o seminueva,<br><span>con garantía real.</span></h1>
-          <p>Equipos 100% originales sellados de fábrica y usados testeados punto por punto. Tomamos tu usado en parte de pago.</p>
+          <span class="hero-kicker"><span class="hero-kicker-dot"></span> MRcelulares · TECNOLOGÍA QUE VA CON VOS</span>
+          <h1>EL PRÓXIMO<br>PUEDE SER <span>TUYO</span></h1>
+          <p>Equipos y accesorios disponibles en MRcelulares. Armá tu selección y consultanos por WhatsApp.</p>
+          <p class="hero-highlight"><strong>Tu próximo equipo, más cerca.</strong><span>Nuevo o seminuevo. Siempre a tu medida.</span></p>
           <div class="hero-actions">
-            <a class="button button-primary hero-cta" href="#inventory-view">Ver catálogo <span aria-hidden="true">↗</span></a>
-            <a class="button button-outline" href="#plan-canje">Cotizar mi usado</a>
+            <a class="button button-primary hero-cta" href="#inventory-view">Ir al catálogo <span aria-hidden="true">↗</span></a>
           </div>
-          <div class="hero-proof"><span class="proof-check">✓</span> Garantía escrita · Envíos seguros · Atención personalizada</div>
+          <div class="hero-proof"><span class="proof-check">✓</span> Nuevo o seminuevo · Siempre a tu medida</div>
         </div>
         <div class="hero-art" aria-hidden="true">
           <div class="hero-glow"></div>
           <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
           <div class="hero-phone phone-back"><span class="camera camera-one"></span><span class="camera camera-two"></span><span class="camera camera-three"></span><span class="camera-flash"></span></div>
           <div class="hero-phone phone-front"><span class="phone-island"></span><span class="phone-wallpaper"></span><span class="phone-logo">MR</span></div>
-          <div class="hero-sticker"><span class="sticker-icon">↗</span><span><strong>Envíos seguros</strong><small>Entrega inmediata</small></span></div>
+          <div class="hero-sticker"><span class="sticker-icon">↗</span><span><strong>Tu próximo equipo,</strong><small>más cerca</small></span></div>
           <span class="hero-spark spark-one">✳</span><span class="hero-spark spark-two">✧</span>
         </div>
       </section>
 
-      <section class="payment-banner" aria-label="Financiación con tarjeta">
-        <span class="payment-banner-icon" aria-hidden="true">▣</span>
-        <div>
-          <strong>PAGÁ CON TARJETA DE CRÉDITO</strong>
-          <span>Disponible en 12 y 24 cuotas</span>
-        </div>
-      </section>
-
-      <section class="trust-strip" id="garantia" aria-label="Beneficios de comprar en MR Celulares">
-        <article class="trust-item"><span class="trust-icon">✓</span><span><strong>Garantía escrita</strong><small>En equipos nuevos y usados</small></span></article>
-        <article class="trust-item"><span class="trust-icon">⌕</span><span><strong>100% testeados</strong><small>Batería, cámaras y funciones</small></span></article>
-        <article class="trust-item"><span class="trust-icon">↻</span><span><strong>Plan Canje</strong><small>Tu equipo como parte de pago</small></span></article>
-        <article class="trust-item"><span class="trust-icon">$</span><span><strong>Pagá a tu manera</strong><small>Efectivo, transferencia y más</small></span></article>
-      </section>
-
       <section class="catalog-section" id="inventory-view">
         <div class="section-heading">
-          <div><p class="eyebrow" id="catalog-eyebrow">ELEGÍ TU PRÓXIMO EQUIPO</p><h2 id="catalog-title">Encontrá el indicado.</h2><p class="section-subtitle" id="catalog-subtitle">Originales, revisados y listos para acompañarte.</p></div>
+          <div><p class="eyebrow" id="catalog-eyebrow">MRcelulares</p><h2 id="catalog-title">Explorá el catálogo</h2><p class="section-subtitle" id="catalog-subtitle">Elegí tus equipos y accesorios. Consultá disponibilidad por WhatsApp.</p></div>
           <span class="catalog-count" id="catalog-count">0 equipos disponibles</span>
         </div>
         <div class="filter-row">
           <div class="filter-pills" role="group" aria-label="Filtrar productos">
             <button class="filter-pill active" data-catalog-filter="all" type="button" aria-pressed="true">Todos</button>
-            <button class="filter-pill" data-catalog-filter="sealed" type="button" aria-pressed="false">Nuevos sellados</button>
-            <button class="filter-pill" data-catalog-filter="used" type="button" aria-pressed="false">Usados seleccionados</button>
+            <button class="filter-pill" data-catalog-filter="phones" type="button" aria-pressed="false">Equipos</button>
             <button class="filter-pill" data-catalog-filter="accessories" type="button" aria-pressed="false">Accesorios</button>
-            <button class="filter-pill" data-catalog-filter="apple" type="button" aria-pressed="false">Apple · iPhone</button>
-            <button class="filter-pill" data-catalog-filter="samsung" type="button" aria-pressed="false">Samsung</button>
-            <button class="filter-pill" data-catalog-filter="xiaomi-motorola" type="button" aria-pressed="false">Xiaomi · Motorola</button>
           </div>
         </div>
         <div class="toolbar">
@@ -226,8 +203,9 @@
             <span aria-hidden="true">⌕</span>
             <input id="search-input" type="search" placeholder="Buscar por modelo..." aria-label="Buscar por modelo">
           </label>
-          <span class="catalog-note">Stock actualizado · Consultá disponibilidad</span>
+          <label class="condition-filter"><span>Condición</span><select id="condition-filter" aria-label="Filtrar por condición"><option value="all">Nuevo y seminuevo</option><option value="sealed">Nuevo</option><option value="used">Seminuevo</option></select></label>
         </div>
+        <p class="catalog-loading" id="catalog-loading" role="status" aria-live="polite" aria-atomic="true">Consultando disponibilidad…</p>
         <div class="product-grid" id="product-grid"></div>
         <p class="form-error catalog-error" id="catalog-error" role="alert" hidden></p>
         <div class="empty-state" id="inventory-empty" hidden>
@@ -239,35 +217,12 @@
         </div>
       </section>
 
-      <section class="trade-section" id="plan-canje">
-        <div class="trade-copy">
-          <p class="eyebrow">RENOVÁ INTELIGENTE</p>
-          <h2>Tu próximo celular<br>vale más con tu usado.</h2>
-          <p>Contanos qué equipo tenés y en qué estado está. Te respondemos con una cotización personalizada, sin compromiso.</p>
-          <div class="trade-perks"><span>✓ Tasación personalizada</span><span>✓ Usalo como parte de pago</span></div>
-        </div>
-        <form class="trade-form" id="trade-form">
-          <h3>Contanos de tu equipo</h3>
-          <label class="trade-label" for="trade-brand">Marca</label>
-          <select class="trade-input" id="trade-brand" required><option value="" selected disabled>Elegí una marca</option><option>Apple</option><option>Samsung</option><option>Motorola</option><option>Xiaomi</option><option>Otra</option></select>
-          <label class="trade-label" for="trade-model">Modelo y capacidad</label>
-          <input class="trade-input" id="trade-model" placeholder="Ej. iPhone 13 · 128 GB" required maxlength="100">
-          <div class="trade-form-row">
-            <div><label class="trade-label" for="trade-battery">Batería</label><select class="trade-input" id="trade-battery"><option>No sé</option><option>Menos del 80%</option><option>80–89%</option><option>90–94%</option><option>95–100%</option></select></div>
-            <div><label class="trade-label" for="trade-condition">Estado estético</label><select class="trade-input" id="trade-condition"><option>Impecable</option><option>Muy bueno</option><option>Con detalles de uso</option><option>Con daños</option></select></div>
-          </div>
-          <button class="button button-whatsapp trade-submit" type="submit"><span class="whatsapp-icon" aria-hidden="true">◉</span> Cotizar por WhatsApp</button>
-          <small class="trade-privacy">La cotización final se confirma al revisar el equipo.</small>
-        </form>
-      </section>
-
-      <section class="faq-section">
-        <div class="section-heading"><div><p class="eyebrow">TE ACOMPAÑAMOS</p><h2>Preguntas frecuentes.</h2></div></div>
-        <div class="faq-list">
-          <details class="faq-item"><summary>¿Qué garantía tienen los usados seleccionados?<span></span></summary><p>Todos los equipos usados se revisan y se entregan con garantía escrita. Consultanos el plazo y las condiciones específicas del modelo que te interesa.</p></details>
-          <details class="faq-item"><summary>¿Cómo funciona el Plan Canje?<span></span></summary><p>Nos contás la marca, el modelo y el estado de tu celular. Lo evaluamos y te pasamos una cotización para usarlo como parte de pago.</p></details>
-          <details class="faq-item"><summary>¿Qué medios de pago aceptan?<span></span></summary><p>Podés pagar en efectivo, transferencia, tarjetas de crédito en 12 y 24 cuotas, y otras alternativas disponibles al momento de la compra.</p></details>
-          <details class="faq-item"><summary>¿Hacen envíos o entregas?<span></span></summary><p>Coordinamos la entrega y el envío seguro directamente con vos. Escribinos para consultar opciones y disponibilidad en tu zona.</p></details>
+      <section class="how-it-works" id="how-it-works" aria-labelledby="how-it-works-title">
+        <div class="section-heading"><div><p class="eyebrow">SIMPLE Y DIRECTO</p><h2 id="how-it-works-title">Cómo funciona</h2></div></div>
+        <div class="steps-grid">
+          <article class="step-card"><span class="step-number">01</span><h3>Encontrá lo que buscás</h3><p>Explorá colores, capacidades y la batería real de cada equipo.</p></article>
+          <article class="step-card"><span class="step-number">02</span><h3>Armá tu selección</h3><p>Elegí tus productos. Podés cambiarlos cuando quieras.</p></article>
+          <article class="step-card"><span class="step-number">03</span><h3>Hablemos por WhatsApp</h3><p>Te confirmamos disponibilidad y precio para concretar la compra.</p></article>
         </div>
       </section>
 
@@ -287,13 +242,29 @@
     </main>
     <footer class="site-footer" id="ubicacion">
       <div class="footer-main">
-        <div class="footer-about"><img class="footer-logo" src="assets/mr-celulares-logo.jpeg" alt="Logo de MR Celulares"><p>Celulares, accesorios seleccionados y atención personalizada. Elegí tu próximo equipo con confianza.</p></div>
-        <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="sealed">Nuevos sellados</a><a href="#inventory-view" data-filter-link="used">Usados seleccionados</a><a href="#inventory-view" data-filter-link="accessories">Accesorios</a><a href="#plan-canje">Plan Canje</a><a href="#garantia">Garantía</a></div>
-        <div class="footer-column"><h3>Estamos para ayudarte</h3><span>Atención: coordiná tu horario</span><span>Entregas a coordinar</span><span>Consultá por tu zona</span><a class="footer-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar horarios y zona de entrega.">Escribinos por WhatsApp · +54 9 280 403-3635 ↗</a></div>
+        <div class="footer-about"><strong class="footer-brand-name">MRcelulares</strong><p>La selección no reserva stock. Precios y disponibilidad sujetos a confirmación.</p></div>
+        <div class="footer-column"><h3>Explorá</h3><a href="#inventory-view" data-filter-link="all">Catálogo</a><a href="#inventory-view" data-filter-link="accessories">Accesorios</a><a href="#how-it-works">Cómo funciona</a></div>
+        <div class="footer-column"><h3>Información importante</h3><p class="footer-legal">Catálogo informativo: no se confirman compras, pagos ni reservas por esta página. Los precios corresponden a efectivo o transferencia. Las simulaciones de cuotas pueden variar según las condiciones vigentes; verificá disponibilidad y precio con MRcelulares por WhatsApp antes de acordar la operación.</p></div>
       </div>
-      <div class="footer-bottom"><span>© <span id="current-year"></span> MR Celulares</span><span>Stock actualizado en línea.</span></div>
+      <div class="footer-bottom"><span>© <span id="current-year"></span> MRcelulares</span><span>Catálogo informativo · Consultas por WhatsApp</span></div>
     </footer>
   </div>
+
+  <dialog class="dialog selection-dialog" id="selection-dialog" aria-labelledby="selection-title" aria-describedby="selection-notice">
+    <section class="dialog-card selection-card">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">MRcelulares</p><h2 id="selection-title">Mi selección</h2></div>
+        <button class="icon-button" id="selection-close" type="button" aria-label="Cerrar mi selección">×</button>
+      </div>
+      <p class="selection-notice" id="selection-notice">Guardá lo que te gusta y consultanos. Tu selección no reserva stock.</p>
+      <div class="selection-items" id="selection-items" aria-live="polite"></div>
+      <p class="selection-empty" id="selection-empty">Todavía no agregaste productos.</p>
+      <div class="selection-footer">
+        <strong class="selection-total" id="selection-total"></strong>
+        <a class="button button-whatsapp selection-whatsapp" id="selection-whatsapp" href="#" target="_blank" rel="noopener noreferrer">Consultar por WhatsApp <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </dialog>
 
   <dialog class="dialog" id="admin-login-dialog">
     <form class="dialog-card" id="admin-login-form">
@@ -335,8 +306,8 @@
         <div id="product-condition-field">
           <label class="field-label" for="product-condition">Estado <span>*</span></label>
           <select class="text-input" id="product-condition" name="condition" required>
-            <option value="used">Usado</option>
-            <option value="sealed">Nuevo sellado</option>
+            <option value="used">Seminuevo</option>
+            <option value="sealed">Nuevo</option>
           </select>
         </div>
         <div>
@@ -351,8 +322,9 @@
       </div>
       <label class="field-label" id="product-grade-label" for="product-grade">Estado estético (opcional)</label>
       <select class="text-input" id="product-grade" name="grade"><option value="">Sin especificar</option><option value="A+ Impecable">A+ Impecable</option><option value="A Excelente">A Excelente</option><option value="B Muy bueno">B Muy bueno</option><option value="Con detalles de uso">Con detalles de uso</option></select>
-      <label class="field-label" id="product-description-label" for="product-description">Detalle (opcional)</label>
-      <input class="text-input" id="product-description" name="description" placeholder="Color, capacidad, accesorios..." maxlength="160">
+      <label class="field-label" id="product-description-label" for="product-description">Colores, capacidad y detalles (opcional)</label>
+      <input class="text-input" id="product-description" name="description" placeholder="Colores: Negro, Plata | Capacidad: 128 GB" aria-describedby="product-description-hint" maxlength="160">
+      <small class="price-hint" id="product-description-hint">Usá “Colores:” y “Capacidad:” para mostrarlos en la tarjeta.</small>
       <label class="field-label" id="product-photo-label" for="product-photo">Foto (opcional)</label>
       <div class="photo-picker">
         <input id="product-photo" name="photo" type="file" accept="image/*" multiple>
@@ -447,7 +419,6 @@
     <button class="photo-zoom-nav photo-zoom-next" id="photo-zoom-next" type="button" aria-label="Foto siguiente">›</button>
   </dialog>
 
-  <a class="floating-whatsapp whatsapp-link" href="#" data-message="Hola, quiero consultar por un celular." aria-label="Consultar por WhatsApp"><span aria-hidden="true">◉</span></a>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
