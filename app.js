@@ -7,10 +7,10 @@ import {
   getDoc,
   increment,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
-  writeBatch
+  updateDoc
 } from "firebase/firestore";
 import { auth, db } from "./src/firebase.js";
 
@@ -22,6 +22,7 @@ const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Store number in international format with country code only.
 const WHATSAPP_PHONE = "5492804033635";
 const SELECTION_STORAGE_KEY = "mrcelulares-selection";
+const SELECTION_NOTES_KEY = "mrcelulares-selection-observations";
 const FACEBOOK_URL = "";
 const elements = {
   addButton: document.querySelector("#add-product-button"),
@@ -37,10 +38,16 @@ const elements = {
   productCondition: document.querySelector("#product-condition"),
   productConditionField: document.querySelector("#product-condition-field"),
   productPrice: document.querySelector("#product-price"),
+  productPriceNote: document.querySelector("#product-price-note"),
   productDescription: document.querySelector("#product-description"),
   productBrand: document.querySelector("#product-brand"),
   productCurrency: document.querySelector("#product-currency"),
   productBattery: document.querySelector("#product-battery"),
+  productColor: document.querySelector("#product-color"),
+  productCapacity: document.querySelector("#product-capacity"),
+  productQuantity: document.querySelector("#product-quantity"),
+  productFeatured: document.querySelector("#product-featured"),
+  productOffer: document.querySelector("#product-offer"),
   productBatteryField: document.querySelector("#product-battery-field"),
   productGrade: document.querySelector("#product-grade"),
   productGradeLabel: document.querySelector("#product-grade-label"),
@@ -78,6 +85,10 @@ const elements = {
   totalVisitCount: document.querySelector("#total-visit-count"),
   tabReceiptCount: document.querySelector("#tab-receipt-count"),
   search: document.querySelector("#search-input"),
+  brandFilter: document.querySelector("#brand-filter"),
+  capacityFilter: document.querySelector("#capacity-filter"),
+  availabilityFilter: document.querySelector("#availability-filter"),
+  currencyFilter: document.querySelector("#currency-filter"),
   catalogCount: document.querySelector("#catalog-count"),
   catalogEyebrow: document.querySelector("#catalog-eyebrow"),
   catalogTitle: document.querySelector("#catalog-title"),
@@ -92,6 +103,8 @@ const elements = {
   selectionItems: document.querySelector("#selection-items"),
   selectionEmpty: document.querySelector("#selection-empty"),
   selectionTotal: document.querySelector("#selection-total"),
+  selectionObservations: document.querySelector("#selection-observations"),
+  selectionClear: document.querySelector("#selection-clear"),
   selectionWhatsapp: document.querySelector("#selection-whatsapp"),
   inventoryTab: document.querySelector("#inventory-tab"),
   receiptsTab: document.querySelector("#receipts-tab"),
@@ -166,6 +179,7 @@ let unsubscribeVisits = null;
 let todayVisitCount = 0;
 let totalVisitCount = 0;
 let selection = {};
+let selectionObservations = "";
 let catalogLoadingTimer;
 
 async function callAdminApi(endpoint, body) {
@@ -272,7 +286,9 @@ async function saveProduct(product, photos = []) {
 
   const { photo: localPhoto, ...cloudProduct } = product;
   try {
+    const existingProduct = products.find(item => item.id === product.id) || {};
     await setDoc(doc(db, "products", product.id), {
+      ...existingProduct,
       ...cloudProduct,
       photoUrl: photoUrls[0] || "",
       photoPath: photoPaths[0] || "",
@@ -280,7 +296,7 @@ async function saveProduct(product, photos = []) {
       photoUrls,
       photoPaths,
       photoStorages
-    });
+    }, { merge: true });
   } catch (error) {
     for (const uploadedPhoto of uploadedPhotos) {
       try {
@@ -308,10 +324,25 @@ async function saveProduct(product, photos = []) {
 
 async function saveSale(product, receipt) {
   if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede registrar ventas.");
-  const batch = writeBatch(db);
-  batch.update(doc(db, "products", product.id), { status: "sold", soldAt: receipt.soldAt });
-  batch.set(doc(db, "receipts", receipt.id), receipt);
-  await batch.commit();
+  await runTransaction(db, async transaction => {
+    const productRef = doc(db, "products", product.id);
+    const snapshot = await transaction.get(productRef);
+    if (!snapshot.exists()) throw new Error("El producto ya no existe en el inventario.");
+    const currentProduct = snapshot.data();
+    const availableQuantity = getAvailableQuantity(currentProduct);
+    if (availableQuantity < 1) throw new Error("El producto ya no tiene unidades disponibles.");
+    if (hasManagedQuantity(currentProduct)) {
+      const nextQuantity = availableQuantity - 1;
+      transaction.update(productRef, {
+        quantity: nextQuantity,
+        status: nextQuantity === 0 ? "sold" : "available",
+        ...(nextQuantity === 0 ? { soldAt: receipt.soldAt } : { soldAt: deleteField() })
+      });
+    } else {
+      transaction.update(productRef, { status: "sold", soldAt: receipt.soldAt });
+    }
+    transaction.set(doc(db, "receipts", receipt.id), receipt);
+  });
 }
 
 async function deleteProduct(product) {
@@ -419,9 +450,9 @@ function hideError(element) {
 }
 
 function render() {
-  const availableCount = products.filter(product => product.status !== "sold").length;
+  const availableCount = products.reduce((total, product) => total + getAvailableQuantity(product), 0);
   elements.stockCount.textContent = availableCount;
-  elements.soldCount.textContent = products.length - availableCount;
+  elements.soldCount.textContent = products.filter(product => product.status === "sold").length;
   elements.receiptCount.textContent = receipts.length;
   elements.todayVisitCount.textContent = todayVisitCount;
   elements.totalVisitCount.textContent = totalVisitCount;
@@ -429,6 +460,28 @@ function render() {
   renderProducts();
   renderReceipts();
   renderSelection();
+}
+
+function getAvailableQuantity(product) {
+  if (product.status === "sold") return 0;
+  if (product.quantity === undefined || product.quantity === null || product.quantity === "") return 1;
+  const quantity = Number(product.quantity);
+  return Number.isSafeInteger(quantity) && quantity >= 0 ? quantity : 0;
+}
+
+function hasManagedQuantity(product) {
+  return product.quantity !== undefined && product.quantity !== null && product.quantity !== "";
+}
+
+function isProductFlagEnabled(value) {
+  return value === true || value === 1 || value === "true" || value === "yes";
+}
+
+function getProductBrand(product) {
+  if (typeof product.brand === "string" && product.brand.trim()) return product.brand.trim();
+  if (product.category === "accessory") return "Accesorios";
+  if (product.category === "other") return "Otros";
+  return brandLabel(detectBrand(product));
 }
 
 function syncAdminUI() {
@@ -587,11 +640,16 @@ async function handleAuthState(user) {
 }
 
 function renderProducts() {
+  updateCatalogFilterOptions();
   const query = elements.search.value.trim().toLocaleLowerCase("es");
   const status = elements.statusFilter.value;
   const conditionFilter = elements.conditionFilter.value;
+  const availability = elements.availabilityFilter.value;
+  const brand = elements.brandFilter.value;
+  const capacity = elements.capacityFilter.value;
+  const currency = elements.currencyFilter.value;
   const accessoriesFilter = catalogFilter === "accessories";
-  elements.catalogEyebrow.textContent = "MRcelulares";
+  elements.catalogEyebrow.textContent = "MR CELULARES";
   elements.catalogTitle.textContent = "Explorá el catálogo";
   elements.catalogSubtitle.textContent = accessoriesFilter
     ? "Encontrá accesorios para acompañar tu equipo."
@@ -599,28 +657,37 @@ function renderProducts() {
   elements.search.placeholder = accessoriesFilter ? "Buscar accesorios..." : "Buscar por modelo...";
   elements.search.setAttribute("aria-label", accessoriesFilter ? "Buscar accesorios" : "Buscar por modelo");
   const visibleProducts = products.filter(product => {
-    const searchable = `${product.name} ${product.brand || ""} ${product.description || ""}`.toLocaleLowerCase("es");
+    const specs = productSpecs(product);
+    const searchable = `${product.name} ${product.brand || ""} ${product.description || ""} ${specs.color} ${specs.storage}`.toLocaleLowerCase("es");
     const matchesText = searchable.includes(query);
-    const isAvailable = product.status !== "sold";
-    const matchesStatus = status === "all" || (status === "available" ? isAvailable : product.status === status);
+    const stock = getAvailableQuantity(product);
+    const isAvailable = stock > 0;
+    const matchesStatus = !isAdminView || status === "all"
+      || (status === "available" ? isAvailable : !isAvailable);
     const matchesCategory = catalogFilter === "all"
-      || (catalogFilter === "phones" && product.category !== "accessory")
+      || (catalogFilter === "phones" && product.category !== "accessory" && product.category !== "other")
       || (catalogFilter === "accessories" && product.category === "accessory")
-    const matchesCondition = product.category === "accessory"
+      || (catalogFilter === "other" && product.category === "other");
+    const matchesCondition = product.category === "accessory" || product.category === "other"
       || conditionFilter === "all"
       || (conditionFilter === "sealed" && product.condition === "sealed")
       || (conditionFilter === "used" && product.condition !== "sealed");
-    return matchesText && matchesStatus && matchesCategory && matchesCondition;
+    const productBrand = getProductBrand(product).toLocaleLowerCase("es");
+    const matchesBrand = brand === "all" || productBrand === brand.toLocaleLowerCase("es");
+    const matchesCapacity = capacity === "all" || specs.storage.toLocaleLowerCase("es") === capacity.toLocaleLowerCase("es");
+    const matchesAvailability = isAdminView || availability === "all"
+      || (availability === "available" ? isAvailable : !isAvailable);
+    const matchesCurrency = currency === "all" || (product.currency || "ARS") === currency;
+    return matchesText && matchesStatus && matchesCategory && matchesCondition
+      && matchesBrand && matchesCapacity && matchesAvailability && matchesCurrency;
   });
 
   elements.productGrid.replaceChildren();
   visibleProducts.forEach(product => elements.productGrid.append(createProductCard(product)));
-  elements.catalogCount.textContent = catalogFilter === "accessories"
-    ? `${visibleProducts.length} ${visibleProducts.length === 1 ? "accesorio disponible" : "accesorios disponibles"}`
-    : `${visibleProducts.length} ${visibleProducts.length === 1 ? "producto disponible" : "productos disponibles"}`;
-  const noProductsExist = products.filter(product => product.status !== "sold").length === 0;
+  elements.catalogCount.textContent = `${visibleProducts.length} ${visibleProducts.length === 1 ? "producto" : "productos"} encontrados`;
+  const noProductsExist = products.every(product => getAvailableQuantity(product) === 0);
   const noAccessoriesExist = !products.some(product => product.category === "accessory");
-  const noPhonesExist = !products.some(product => product.category !== "accessory" && product.status !== "sold");
+  const noPhonesExist = !products.some(product => product.category !== "accessory" && product.category !== "other" && getAvailableQuantity(product) > 0);
   elements.inventoryEmpty.hidden = visibleProducts.length > 0;
   elements.inventoryEmptyTitle.textContent = accessoriesFilter
     ? noAccessoriesExist ? "Próximamente, accesorios." : "No encontramos accesorios con ese filtro."
@@ -640,6 +707,30 @@ function renderProducts() {
     : "Hola, estoy buscando un celular. ¿Qué equipos tienen disponibles?";
   emptyContact.href = whatsappUrl(emptyContact.dataset.message);
   elements.emptyAddButton.hidden = true;
+}
+
+function updateCatalogFilterOptions() {
+  const setOptions = (select, placeholder, values) => {
+    const previous = select.value || "all";
+    const uniqueValues = [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+    const expected = ["all", ...uniqueValues];
+    const current = [...select.options].map(option => option.value);
+    if (expected.length !== current.length || expected.some((value, index) => value !== current[index])) {
+      select.replaceChildren(new Option(placeholder, "all"));
+      uniqueValues.forEach(value => select.add(new Option(value, value)));
+    }
+    select.value = expected.includes(previous) ? previous : "all";
+  };
+  setOptions(
+    elements.brandFilter,
+    "Todas",
+    products.map(getProductBrand)
+  );
+  setOptions(
+    elements.capacityFilter,
+    "Todas",
+    products.map(product => productSpecs(product).storage)
+  );
 }
 
 function detectBrand(product) {
@@ -670,7 +761,8 @@ function renderZoomPhoto() {
 function createProductCard(product) {
   const card = document.createElement("article");
   card.className = "product-card";
-  const isSold = product.status === "sold";
+  const availableQuantity = getAvailableQuantity(product);
+  const isSold = availableQuantity === 0;
   const isAccessory = product.category === "accessory";
   const isSealed = !isAccessory && product.condition === "sealed";
   const condition = isAccessory ? "ACCESORIO" : isSealed ? "NUEVO" : "SEMINUEVO";
@@ -678,36 +770,48 @@ function createProductCard(product) {
   const specs = productSpecs(product);
   const battery = getBatteryStatus(product);
   const selectedQuantity = selection[product.id] || 0;
+  const brand = getProductBrand(product);
+  const availabilityLabel = isSold
+    ? "SIN STOCK"
+    : hasManagedQuantity(product) ? `${availableQuantity} DISPONIBLE${availableQuantity === 1 ? "" : "S"}` : "DISPONIBLE";
+  const badges = [
+    isProductFlagEnabled(product.offer) || isProductFlagEnabled(product.isOffer) ? '<span class="product-tag offer-tag">OFERTA</span>' : "",
+    isProductFlagEnabled(product.featured) || isProductFlagEnabled(product.isFeatured) ? '<span class="product-tag featured-tag">DESTACADO</span>' : "",
+    isProductFlagEnabled(product.newArrival) ? '<span class="product-tag new-tag">NOVEDAD</span>' : ""
+  ].filter(Boolean).join("");
+  const productTags = badges ? `<span class="product-tags">${badges}</span>` : "";
   const photoUrls = Array.isArray(product.photoUrls) && product.photoUrls.length
     ? product.photoUrls.filter(Boolean)
     : (product.photoUrl ? [product.photoUrl] : []);
   const photo = photoUrls.length
-    ? `<button class="product-photo-button" type="button" data-photo-index="0" aria-label="Ampliar fotos de ${escapeHtml(product.name)}"><img src="${escapeHtml(photoUrls[0])}" alt="${escapeHtml(product.name)}"></button>${photoUrls.length > 1 ? `<span class="photo-count-badge">${photoUrls.length} fotos</span>` : ""}`
+    ? `<button class="product-photo-button" type="button" data-photo-index="0" aria-label="Ampliar fotos de ${escapeHtml(product.name)}"><img src="${escapeHtml(photoUrls[0])}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async"></button>${photoUrls.length > 1 ? `<span class="photo-count-badge">${photoUrls.length} fotos</span>` : ""}`
     : isAccessory
       ? `<div class="product-placeholder accessory" aria-hidden="true"><span class="placeholder-glow"></span><svg viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8m-9 5v8"/></svg><span class="placeholder-brand">ACCESORIOS</span></div>`
-      : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(product.brand || brandLabel(detectBrand(product)))}</span></div>`;
+      : `<div class="product-placeholder ${detectBrand(product)}" aria-hidden="true"><span class="placeholder-glow"></span><span class="placeholder-phone">MR</span><span class="placeholder-brand">${escapeHtml(brand)}</span></div>`;
   const usedDetails = !isAccessory && !isSealed
-    ? `<div class="product-condition-details"><span class="battery-tag">⌁ Batería ${escapeHtml(battery || "no informada")}</span>${product.grade ? `<span class="grade-tag">${escapeHtml(product.grade)}</span>` : ""}</div>`
+    ? `<div class="product-condition-details"><span class="battery-tag">Batería ${escapeHtml(battery || "no informada")}</span>${product.grade ? `<span class="grade-tag">${escapeHtml(product.grade)}</span>` : ""}</div>`
     : "";
   const productDescription = product.description
     || (isAccessory ? "Accesorios para celulares" : brandLabel(detectBrand(product)));
   const productDetails = isAccessory
     ? `<div class="product-specs"><span>Color: ${escapeHtml(specs.color || "consultar")}</span></div>`
     : `<div class="product-specs"><span>Color: ${escapeHtml(specs.color || "consultar")}</span><span>Capacidad: ${escapeHtml(specs.storage || "consultar")}</span></div>`;
-  const installmentPrice = Number(product.price) / 3;
   card.innerHTML = `
     <div class="product-image">
       ${photo}
       <span class="condition-badge ${conditionClass}">${condition}</span>
+      ${productTags}
       ${isSold ? '<span class="sold-overlay">VENDIDO</span>' : ""}
     </div>
     <div class="product-content">
+      <p class="product-brand">${escapeHtml(brand)}</p>
       <h3>${escapeHtml(product.name)}</h3>
       <p class="product-description">${escapeHtml(productDescription)}</p>
       ${productDetails}
       ${usedDetails}
-      <p class="product-price">${formatPrice(product.price, product.currency)}<span>${product.currency === "USD" ? "USD" : "ARS"}</span></p>
-      <p class="product-price-note">Efectivo o transferencia · Simulación: 3 cuotas de ${formatPrice(installmentPrice, product.currency)}</p>
+      <p class="product-availability ${isSold ? "unavailable" : ""}">${availabilityLabel}</p>
+      <p class="product-price">${formatPrice(product.price, product.currency)}<span>${escapeHtml(product.currency || "ARS")}</span></p>
+      <p class="product-price-note">${escapeHtml(product.priceNote || "Precio sujeto a confirmación por WhatsApp.")}</p>
       <button class="button button-primary add-selection-button" type="button" ${isSold ? "disabled" : ""} aria-label="Agregar ${escapeHtml(product.name)} a mi selección">
         ${selectedQuantity ? `Agregar a mi selección · ${selectedQuantity}` : "Agregar a mi selección"}
       </button>
@@ -741,7 +845,8 @@ function productSpecs(product) {
   const description = String(product.description || "");
   const details = `${description} ${product.name || ""}`;
   const extract = (property, labelPattern) => {
-    const value = product[property];
+    const value = product[property]
+      || (property === "colors" ? product.color : product.capacity || product.storage);
     if (Array.isArray(value)) return value.filter(Boolean).join(", ");
     if (typeof value === "string" && value.trim()) return value.trim();
     const match = description.match(new RegExp(`(?:${labelPattern})\\s*:\\s*([^|;\\n]+)`, "i"));
@@ -751,8 +856,16 @@ function productSpecs(product) {
   };
   return {
     color: extract("colors", "colores?|color"),
-    storage: extract("storage", "capacidad(?:es)?|almacenamiento|storage")
+    storage: normalizeCapacity(extract("storage", "capacidad(?:es)?|almacenamiento|storage"))
   };
+}
+
+function normalizeCapacity(value) {
+  return String(value || "")
+    .replace(/\s*(GB|TB)\b/gi, " $1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("es");
 }
 
 function getBatteryStatus(product) {
@@ -763,12 +876,16 @@ function getBatteryStatus(product) {
 
 function changeSelection(productId, amount) {
   const product = products.find(item => item.id === productId);
-  if (amount > 0 && (!product || product.status === "sold")) {
+  if (amount > 0 && (!product || getAvailableQuantity(product) === 0)) {
     notify("Este producto ya no está disponible en el catálogo.");
     return;
   }
 
   const nextQuantity = (selection[productId] || 0) + amount;
+  if (amount > 0 && nextQuantity > getAvailableQuantity(product)) {
+    notify("La cantidad seleccionada supera el stock disponible.");
+    return;
+  }
   if (nextQuantity > 0) selection[productId] = nextQuantity;
   else delete selection[productId];
   saveSelection();
@@ -799,8 +916,29 @@ function readSelection() {
   }
 }
 
+function saveSelectionObservations() {
+  selectionObservations = elements.selectionObservations.value.trim();
+  try {
+    localStorage.setItem(SELECTION_NOTES_KEY, selectionObservations);
+  } catch (error) {
+    console.error("No se pudieron guardar las observaciones:", error);
+    notify("No se pudieron guardar las observaciones en este dispositivo.");
+  }
+  renderSelection();
+}
+
+function readSelectionObservations() {
+  try {
+    return localStorage.getItem(SELECTION_NOTES_KEY) || "";
+  } catch (error) {
+    console.error("No se pudieron recuperar las observaciones:", error);
+    notify("No se pudieron recuperar las observaciones en este dispositivo.");
+    return "";
+  }
+}
+
 function buildSelectionMessage(selectedProducts) {
-  const lines = ["Hola, quiero consultar por esta selección de MRcelulares:"];
+  const lines = ["Hola, soy cliente de MR CELULARES y quiero consultar por esta selección:"];
   selectedProducts.forEach(({ product, quantity }) => {
     const isAccessory = product.category === "accessory";
     const isSealed = product.condition === "sealed";
@@ -812,11 +950,12 @@ function buildSelectionMessage(selectedProducts) {
     lines.push(
       "",
       `• ${product.name} × ${quantity}`,
-      `  Capacidad: ${specs.storage || "consultar"} · Color: ${specs.color || "consultar"}`,
+      `  Marca: ${getProductBrand(product)} · Capacidad: ${specs.storage || "consultar"} · Color: ${specs.color || "consultar"}`,
       `  Condición: ${condition}${battery}`,
-      `  Precio por unidad: ${formatPrice(product.price, product.currency)} (${product.currency || "ARS"})`
+      `  Precio por unidad: ${formatPrice(product.price, product.currency)} (${product.currency || "ARS"})${product.priceNote ? ` · ${product.priceNote}` : ""}`
     );
   });
+  if (selectionObservations) lines.push("", `Observaciones: ${selectionObservations}`);
   lines.push("", "¿Me confirman disponibilidad y precio?");
   return lines.join("\n");
 }
@@ -829,6 +968,7 @@ function renderSelection() {
   }));
   const count = selectedProducts.reduce((total, item) => total + item.quantity, 0);
   elements.selectionCount.textContent = count;
+  elements.selectionClear.disabled = count === 0;
   elements.selectionItems.replaceChildren();
   elements.selectionEmpty.hidden = selectedProducts.length > 0;
   elements.selectionTotal.textContent = "";
@@ -855,12 +995,12 @@ function renderSelection() {
         <strong>${escapeHtml(product.name)}</strong>
         <small>${escapeHtml(specs.storage || "Capacidad a consultar")} · ${escapeHtml(specs.color || "Color a consultar")}</small>
         <small>${condition}${battery} · ${formatPrice(product.price, product.currency)}</small>
-        ${product.status === "sold" ? '<small class="selection-unavailable">Disponibilidad a confirmar</small>' : ""}
+        ${getAvailableQuantity(product) < quantity ? '<small class="selection-unavailable">Disponibilidad a confirmar</small>' : ""}
       </div>
       <div class="selection-controls" aria-label="Cantidad de ${escapeHtml(product.name)}">
         <button class="small-button" type="button" data-selection-action="decrease" data-product-id="${escapeHtml(id)}" aria-label="Restar una unidad de ${escapeHtml(product.name)}">−</button>
         <span>${quantity}</span>
-        <button class="small-button" type="button" data-selection-action="increase" data-product-id="${escapeHtml(id)}" aria-label="Sumar una unidad de ${escapeHtml(product.name)}">+</button>
+        <button class="small-button" type="button" data-selection-action="increase" data-product-id="${escapeHtml(id)}" aria-label="Sumar una unidad de ${escapeHtml(product.name)}" ${quantity >= getAvailableQuantity(product) ? "disabled" : ""}>+</button>
         <button class="small-button delete-button" type="button" data-selection-action="remove" data-product-id="${escapeHtml(id)}" aria-label="Quitar ${escapeHtml(product.name)} de mi selección">Quitar</button>
       </div>`;
     elements.selectionItems.append(row);
@@ -948,10 +1088,23 @@ function openProductDialog(product = null, category = "phone") {
   elements.productName.value = product?.name || "";
   elements.productCondition.value = product?.condition || "used";
   elements.productPrice.value = formatPriceInput(product?.price);
+  elements.productPriceNote.value = product?.priceNote || "";
   elements.productDescription.value = product?.description || "";
   elements.productBrand.value = product?.brand || "";
   elements.productCurrency.value = product?.currency || "ARS";
   elements.productBattery.value = product?.battery || "";
+  const specs = product ? productSpecs(product) : { color: "", storage: "" };
+  elements.productColor.value = product?.color || specs.color || "";
+  elements.productCapacity.value = product?.capacity || product?.storage || specs.storage || "";
+  const savedQuantity = Number(product?.quantity);
+  elements.productQuantity.value = product?.quantity !== undefined
+    && product?.quantity !== null
+    && product?.quantity !== ""
+    && Number.isSafeInteger(savedQuantity)
+    ? savedQuantity
+    : "";
+  elements.productFeatured.checked = isProductFlagEnabled(product?.featured) || isProductFlagEnabled(product?.isFeatured);
+  elements.productOffer.checked = isProductFlagEnabled(product?.offer) || isProductFlagEnabled(product?.isOffer);
   elements.productGrade.value = product?.grade || "";
   updateProductCategoryFields();
   const existingPhotoUrls = product
@@ -998,10 +1151,12 @@ function createReceiptNumber(date) {
 async function restoreProduct(product) {
   try {
     if (!isAdmin || !isAdminView) throw new Error("Solo el administrador puede actualizar el inventario.");
-    await updateDoc(doc(db, "products", product.id), {
+    const updates = {
       status: "available",
       soldAt: deleteField()
-    });
+    };
+    if (hasManagedQuantity(product) && getAvailableQuantity(product) === 0) updates.quantity = 1;
+    await updateDoc(doc(db, "products", product.id), updates);
     notify("El producto volvió al inventario. El comprobante anterior se conservó.");
   } catch (error) {
     notify(`No se pudo actualizar el inventario: ${error.message}`);
@@ -1015,7 +1170,7 @@ function receiptLine(label, value) {
 function openReceipt(receipt) {
   const isAccessory = receipt.category === "accessory";
   elements.printReceipt.innerHTML = `
-    <div class="receipt-brand"><strong>MRcelulares</strong><p>Comprobante de venta</p></div>
+    <div class="receipt-brand"><strong>MR CELULARES</strong><p>Comprobante de venta</p></div>
     <div class="receipt-number"><span>N.º <strong>${escapeHtml(receipt.number)}</strong></span><span>${formatDate(receipt.soldAt)}</span></div>
     <p class="eyebrow">DATOS DEL COMPRADOR</p>
     ${receiptLine("Nombre y apellido", receipt.buyer.name)}
@@ -1247,7 +1402,7 @@ function createPaymentMessage(details) {
     ? pendingBalance < 0.005 && installments.length ? "Cuenta saldada" : paidCount || downpayment > 0 ? "En curso" : "Pendiente"
     : "Pagada";
   const lines = [
-    "*Comprobante de pago · MRcelulares*",
+    "*Comprobante de pago · MR CELULARES*",
     `*Fecha:* ${formatPaymentDate(new Date(), { day: "2-digit", month: "long", year: "numeric" })}`,
     `*Titular:* ${name}`,
     `*DNI:* ${documentNumber}`,
@@ -1277,7 +1432,7 @@ function createPaymentMessage(details) {
     lines.push("*Estado:* Total abonado. Operación cancelada.");
   }
 
-  lines.push("", "Gracias por elegir MRcelulares.");
+  lines.push("", "Gracias por elegir MR CELULARES.");
   return lines.join("\n");
 }
 
@@ -1431,6 +1586,12 @@ elements.productForm.addEventListener("submit", async event => {
   const category = elements.productCategory.value;
   const isAccessory = category === "accessory";
   const battery = !isAccessory && elements.productBattery.value ? Number(elements.productBattery.value) : null;
+  const quantityValue = elements.productQuantity.value.trim();
+  const quantity = quantityValue ? Number(quantityValue) : null;
+  if (quantityValue && (!Number.isSafeInteger(quantity) || quantity < 0)) {
+    showError(elements.productError, "La cantidad debe ser un número entero igual o mayor que cero.");
+    return;
+  }
   const product = {
     id: existing?.id || crypto.randomUUID(),
     category,
@@ -1442,6 +1603,12 @@ elements.productForm.addEventListener("submit", async event => {
     battery,
     grade: isAccessory ? "" : elements.productGrade.value,
     description: elements.productDescription.value.trim(),
+    priceNote: elements.productPriceNote.value.trim(),
+    ...(elements.productColor.value.trim() ? { color: elements.productColor.value.trim() } : {}),
+    ...(elements.productCapacity.value.trim() ? { capacity: elements.productCapacity.value.trim() } : {}),
+    ...(quantityValue ? { quantity } : {}),
+    featured: elements.productFeatured.checked,
+    offer: elements.productOffer.checked,
     photoUrl: existing?.photoUrl || "",
     photoPath: existing?.photoPath || "",
     photoStorage: existing?.photoStorage || "",
@@ -1517,6 +1684,10 @@ elements.printButton.addEventListener("click", () => window.print());
 elements.search.addEventListener("input", renderProducts);
 elements.statusFilter.addEventListener("change", renderProducts);
 elements.conditionFilter.addEventListener("change", renderProducts);
+elements.brandFilter.addEventListener("change", renderProducts);
+elements.capacityFilter.addEventListener("change", renderProducts);
+elements.availabilityFilter.addEventListener("change", renderProducts);
+elements.currencyFilter.addEventListener("change", renderProducts);
 document.querySelectorAll("[data-catalog-filter]").forEach(button => {
   button.addEventListener("click", () => {
     catalogFilter = button.dataset.catalogFilter;
@@ -1545,6 +1716,12 @@ document.querySelector("#management-panel").addEventListener("toggle", event => 
 });
 elements.selectionOpen.addEventListener("click", () => elements.selectionDialog.showModal());
 elements.selectionClose.addEventListener("click", () => elements.selectionDialog.close());
+elements.selectionObservations.addEventListener("input", saveSelectionObservations);
+elements.selectionClear.addEventListener("click", () => {
+  selection = {};
+  saveSelection();
+  render();
+});
 elements.selectionItems.addEventListener("click", event => {
   const button = event.target.closest("[data-selection-action]");
   if (!button) return;
@@ -1576,7 +1753,7 @@ function whatsappUrl(message) {
 }
 
 function attachWhatsApp(link) {
-  link.href = whatsappUrl(link.dataset.message || "Hola, quiero consultar por MRcelulares.");
+  link.href = whatsappUrl(link.dataset.message || "Hola, quiero consultar por MR CELULARES.");
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.addEventListener("click", event => {
@@ -1700,6 +1877,8 @@ elements.photoZoomDialog.addEventListener("keydown", event => {
 });
 
 selection = readSelection();
+selectionObservations = readSelectionObservations();
+elements.selectionObservations.value = selectionObservations;
 renderSelection();
 listenForProducts();
 void registerWebsiteVisit();
